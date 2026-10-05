@@ -4,6 +4,30 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   const parser = Esp32MessageParser();
 
+  test('existing command payloads remain unchanged', () {
+    expect(Esp32Command.values.map((command) => command.payload), [
+      'a',
+      'd',
+      'w',
+      's',
+      'x',
+      'k',
+      'q',
+      'e',
+      'j',
+      'z',
+      '+',
+      '-',
+    ]);
+  });
+
+  test('existing safety messages remain unchanged', () {
+    expect(parser.parse('READY').type, Esp32MessageType.ready);
+    expect(parser.parse('STOP').type, Esp32MessageType.stopped);
+    expect(parser.parse('STOP_TIMEOUT').type, Esp32MessageType.stopTimeout);
+    expect(parser.parse('CANCELADO').type, Esp32MessageType.cancelled);
+  });
+
   group('Esp32MessageParser', () {
     test('accepts both sequence-start variants', () {
       expect(

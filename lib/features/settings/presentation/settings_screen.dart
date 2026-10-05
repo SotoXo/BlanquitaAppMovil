@@ -53,7 +53,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   delay: const Duration(milliseconds: 55),
                   child: _ConnectionPanel(
                     machine: machine,
-                    url: settings.websocketUrl,
                     autoReconnect: settings.autoReconnect,
                     onEdit: () => _editWebsocket(context, controller, machine),
                   ),
@@ -275,7 +274,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           autocorrect: false,
           decoration: const InputDecoration(
             labelText: 'URL',
-            hintText: 'ws://192.168.4.1:81/',
+            hintText: 'ws://192.168.43.27:81/',
           ),
         ),
         actions: [
@@ -325,13 +324,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 class _ConnectionPanel extends StatelessWidget {
   const _ConnectionPanel({
     required this.machine,
-    required this.url,
     required this.autoReconnect,
     required this.onEdit,
   });
 
   final MachineController machine;
-  final String url;
   final bool autoReconnect;
   final VoidCallback onEdit;
 
@@ -367,11 +364,11 @@ class _ConnectionPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Conexión principal',
+                      'ESP32 único',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     Text(
-                      connected ? 'ESP32 conectado' : machine.state.lastStatus,
+                      'ESP32: ${machine.connectionStatusLabel}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(
@@ -383,12 +380,22 @@ class _ConnectionPanel extends StatelessWidget {
               ),
               IconButton(
                 tooltip: 'Reconectar',
-                onPressed: machine.reconnect,
+                onPressed: machine.isConnecting ? null : machine.reconnect,
                 icon: const Icon(CupertinoIcons.arrow_clockwise, size: 19),
               ),
             ],
           ),
           const SizedBox(height: 14),
+          Text(
+            'Red esperada: ${MachineController.wifiName}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Dirección: ${machine.deviceAddress ?? 'Sin dirección'}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 10),
           InkWell(
             borderRadius: BorderRadius.circular(15),
             onTap: onEdit,
@@ -410,7 +417,7 @@ class _ConnectionPanel extends StatelessWidget {
                   const SizedBox(width: 9),
                   Expanded(
                     child: Text(
-                      url,
+                      'WebSocket: ${machine.connectionWebsocketUrl ?? 'Sin dirección guardada'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium,
@@ -425,6 +432,17 @@ class _ConnectionPanel extends StatelessWidget {
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 9),
+          OutlinedButton.icon(
+            onPressed: machine.isConnecting ? null : machine.searchEsp32,
+            icon: const Icon(CupertinoIcons.search, size: 17),
+            label: const Text('Buscar ESP32'),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            machine.state.lastStatus,
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 9),
           Text(

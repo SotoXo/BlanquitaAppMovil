@@ -10,8 +10,7 @@ class SettingsRepository {
 
   AppSettings load() {
     return AppSettings(
-      websocketUrl:
-          _preferences.getString(_Keys.websocketUrl) ?? 'ws://192.168.4.1:81/',
+      websocketUrl: _preferences.getString(_Keys.websocketUrl) ?? '',
       autoReconnect: _preferences.getBool(_Keys.autoReconnect) ?? true,
       hapticsEnabled: _preferences.getBool(_Keys.hapticsEnabled) ?? true,
       confirmSequence: _preferences.getBool(_Keys.confirmSequence) ?? true,

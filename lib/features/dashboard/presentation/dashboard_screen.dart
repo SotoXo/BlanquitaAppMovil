@@ -34,7 +34,7 @@ class DashboardScreen extends StatelessWidget {
                   child: PageHeader(
                     eyebrow: 'Sistema cartesiano',
                     title: 'BLANQUITA',
-                    subtitle: 'Supervisión local del ESP32 principal.',
+                    subtitle: 'Supervisión local del ESP32 único.',
                     trailing: ConnectionBadge(phase: state.connection),
                   ),
                 ),
@@ -82,7 +82,9 @@ class DashboardScreen extends StatelessWidget {
                 const SizedBox(height: 14),
                 _ConnectionDetails(
                   state: state,
-                  websocketUrl: machine.settingsWebsocketUrl,
+                  websocketUrl:
+                      machine.connectionWebsocketUrl ??
+                      'Sin dirección guardada',
                 ),
               ],
             ),
@@ -120,7 +122,7 @@ class _ConnectionNotice extends StatelessWidget {
           Expanded(
             child: Text(
               connecting
-                  ? 'Buscando el ESP32 principal…'
+                  ? 'Conectando al ESP32 único…'
                   : 'Sin enlace. Conecta el teléfono a ${MachineController.wifiName}.',
               maxLines: 2,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(

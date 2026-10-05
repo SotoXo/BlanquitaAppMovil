@@ -4,7 +4,7 @@ enum GlassIntensity { low, medium, high }
 
 class AppSettings {
   const AppSettings({
-    this.websocketUrl = 'ws://192.168.4.1:81/',
+    this.websocketUrl = '',
     this.autoReconnect = true,
     this.hapticsEnabled = true,
     this.confirmSequence = true,

@@ -191,7 +191,7 @@ class _ControlConsole extends StatelessWidget {
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
-                      'Conecta el teléfono a CARTESIANO_ESP32.',
+                      'Conecta el teléfono a ${MachineController.wifiName}.',
                       style: TextStyle(fontSize: 12),
                     ),
                   ),
