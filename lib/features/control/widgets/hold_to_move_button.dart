@@ -52,9 +52,9 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsController>().settings;
-    final duration = settings.reduceMotion
+    final duration = settings.reduceMotion || settings.performanceMode
         ? Duration.zero
-        : const Duration(milliseconds: 130);
+        : const Duration(milliseconds: 155);
     final foreground = widget.active
         ? const Color(0xFF031419)
         : widget.enabled
@@ -71,52 +71,97 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
         onPointerUp: _release,
         onPointerCancel: _release,
         child: AnimatedScale(
-          scale: widget.active ? 0.96 : 1,
+          scale: widget.active ? 0.945 : 1,
           duration: duration,
+          curve: Curves.easeOutCubic,
           child: AnimatedContainer(
             duration: duration,
-            constraints: const BoxConstraints(minWidth: 92, minHeight: 88),
+            curve: Curves.easeOutCubic,
+            constraints: const BoxConstraints(minWidth: 92, minHeight: 84),
+            padding: const EdgeInsets.all(1.2),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(25),
-              color: widget.active
-                  ? AppColors.cyan
-                  : widget.enabled
-                  ? Colors.white.withValues(alpha: 0.065)
-                  : Colors.white.withValues(alpha: 0.025),
-              border: Border.all(
-                width: widget.active ? 2 : 1,
-                color: widget.active
-                    ? AppColors.cyan
-                    : Colors.white.withValues(
-                        alpha: widget.enabled ? 0.14 : 0.05,
-                      ),
+              borderRadius: BorderRadius.circular(23),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: widget.active
+                    ? [AppColors.cyan, AppColors.cyanDeep]
+                    : [
+                        Colors.white.withValues(
+                          alpha: widget.enabled ? 0.15 : 0.055,
+                        ),
+                        AppColors.cyan.withValues(
+                          alpha: widget.enabled ? 0.07 : 0.02,
+                        ),
+                        Colors.white.withValues(alpha: 0.035),
+                      ],
               ),
               boxShadow: widget.active && !settings.performanceMode
                   ? [
                       BoxShadow(
-                        color: AppColors.cyan.withValues(alpha: 0.34),
-                        blurRadius: 26,
-                        spreadRadius: 2,
+                        color: AppColors.cyan.withValues(alpha: 0.25),
+                        blurRadius: 22,
+                        spreadRadius: -2,
                       ),
                     ]
                   : null,
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(widget.icon, size: 35, color: foreground),
-                const SizedBox(height: 4),
-                Text(
-                  widget.label,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: foreground,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.8,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(21.8),
+                color: widget.active
+                    ? AppColors.cyan
+                    : widget.enabled
+                    ? AppColors.graphiteRaised.withValues(alpha: 0.92)
+                    : AppColors.graphite.withValues(alpha: 0.72),
+                gradient: widget.active
+                    ? null
+                    : LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.white.withValues(
+                            alpha: widget.enabled ? 0.055 : 0.018,
+                          ),
+                          AppColors.graphite.withValues(alpha: 0.90),
+                        ],
+                      ),
+              ),
+              child: Stack(
+                children: [
+                  Positioned(
+                    top: 9,
+                    right: 10,
+                    child: Text(
+                      widget.movement.axis,
+                      style: TextStyle(
+                        color: foreground.withValues(alpha: 0.42),
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(widget.icon, size: 29, color: foreground),
+                        const SizedBox(height: 5),
+                        Text(
+                          widget.label,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: foreground,
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.05,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -7,46 +7,58 @@ class PageHeader extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.trailing,
+    this.compact = false,
   });
 
   final String eyebrow;
   final String title;
   final String subtitle;
   final Widget? trailing;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          eyebrow,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Theme.of(context).colorScheme.primary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        SizedBox(height: compact ? 5 : 8),
+        Text(
+          title,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: compact
+              ? Theme.of(context).textTheme.headlineSmall
+              : Theme.of(context).textTheme.headlineMedium,
+        ),
+        SizedBox(height: compact ? 4 : 7),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Text(
+            subtitle,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.56),
+            ),
+          ),
+        ),
+      ],
+    );
+
+    if (trailing == null) return content;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                eyebrow.toUpperCase(),
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  letterSpacing: 2.4,
-                  fontWeight: FontWeight.w800,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(height: 7),
-              Text(title, style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 6),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.62),
-                  height: 1.35,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (trailing != null) ...[const SizedBox(width: 14), trailing!],
+        Expanded(child: content),
+        const SizedBox(width: 12),
+        trailing!,
       ],
     );
   }
@@ -62,13 +74,11 @@ class SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     children: [
       Text(
-        label.toUpperCase(),
-        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          letterSpacing: 1.8,
-          fontWeight: FontWeight.w800,
+        label,
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(
           color: Theme.of(
             context,
-          ).colorScheme.onSurface.withValues(alpha: 0.52),
+          ).colorScheme.onSurface.withValues(alpha: 0.64),
         ),
       ),
       if (trailing != null) ...[const Spacer(), trailing!],

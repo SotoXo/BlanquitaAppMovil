@@ -12,31 +12,30 @@ class AppBackground extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        color: isDark ? AppColors.canvas : const Color(0xFFEAF1F3),
+        gradient: RadialGradient(
+          center: const Alignment(0.72, -0.78),
+          radius: 1.15,
           colors: isDark
-              ? const [Color(0xFF061017), Color(0xFF0B1822), Color(0xFF080E18)]
-              : const [Color(0xFFE7F3F6), Color(0xFFF8FBFC), Color(0xFFEAF0FB)],
+              ? const [Color(0xFF10252D), AppColors.canvas]
+              : const [Color(0xFFF9FCFC), Color(0xFFE5EEF0)],
+          stops: const [0, 0.72],
         ),
       ),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          Positioned(
-            top: -130,
-            right: -90,
-            child: _GlowOrb(
-              size: 330,
-              color: AppColors.cyan.withValues(alpha: isDark ? 0.12 : 0.18),
+          RepaintBoundary(
+            child: CustomPaint(
+              painter: _IndustrialBackdropPainter(isDark: isDark),
             ),
           ),
           Positioned(
-            top: 340,
-            left: -150,
+            top: -160,
+            right: -120,
             child: _GlowOrb(
-              size: 370,
-              color: AppColors.violet.withValues(alpha: isDark ? 0.09 : 0.12),
+              size: 360,
+              color: AppColors.cyan.withValues(alpha: isDark ? 0.075 : 0.12),
             ),
           ),
           child,
@@ -59,8 +58,44 @@ class _GlowOrb extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: RadialGradient(colors: [color, color.withValues(alpha: 0)]),
+        gradient: RadialGradient(
+          colors: [color, color.withValues(alpha: 0)],
+          stops: const [0, 1],
+        ),
       ),
     ),
   );
+}
+
+class _IndustrialBackdropPainter extends CustomPainter {
+  const _IndustrialBackdropPainter({required this.isDark});
+
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final line = Paint()
+      ..color = (isDark ? AppColors.coldWhite : const Color(0xFF17343D))
+          .withValues(alpha: isDark ? 0.022 : 0.035)
+      ..strokeWidth = 0.7;
+    const step = 38.0;
+    for (double x = 18; x < size.width; x += step) {
+      for (double y = 22; y < size.height; y += step) {
+        canvas.drawCircle(Offset(x, y), 0.7, line);
+      }
+    }
+
+    final rail = Paint()
+      ..color = AppColors.cyan.withValues(alpha: isDark ? 0.025 : 0.04)
+      ..strokeWidth = 1;
+    canvas.drawLine(
+      Offset(size.width * 0.78, 0),
+      Offset(size.width * 0.78, size.height),
+      rail,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _IndustrialBackdropPainter oldDelegate) =>
+      oldDelegate.isDark != isDark;
 }

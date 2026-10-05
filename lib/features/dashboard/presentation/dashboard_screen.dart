@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,6 +7,7 @@ import '../../../core/models/machine_state.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../../../features/settings/controller/settings_controller.dart';
 import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/status_widgets.dart';
 import '../widgets/cartesian_visualizer.dart';
@@ -21,175 +23,67 @@ class DashboardScreen extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 132),
+        padding: const EdgeInsets.fromLTRB(18, 22, 18, 126),
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 880),
+            constraints: const BoxConstraints(maxWidth: 900),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                PageHeader(
-                  eyebrow: 'Supervisión cartesiana',
-                  title: 'BLANQUITA',
-                  subtitle:
-                      'Estado operativo y telemetría del ESP32 principal.',
-                  trailing: ConnectionBadge(phase: state.connection),
-                ),
-                const SizedBox(height: 22),
-                if (state.finalLimitActive == true) ...[
-                  const SafetyBanner(
-                    icon: Icons.warning_amber_rounded,
-                    title: 'Final de carrera activado',
-                    message:
-                        'Movimiento y secuencia bloqueados hasta liberar el sensor.',
-                    color: AppColors.danger,
+                MotionReveal(
+                  child: PageHeader(
+                    eyebrow: 'Sistema cartesiano',
+                    title: 'BLANQUITA',
+                    subtitle: 'Supervisión local del ESP32 principal.',
+                    trailing: ConnectionBadge(phase: state.connection),
                   ),
-                  const SizedBox(height: 14),
+                ),
+                const SizedBox(height: 18),
+                if (state.finalLimitActive == true) ...[
+                  const MotionReveal(
+                    child: SafetyBanner(
+                      icon: CupertinoIcons.exclamationmark_triangle,
+                      title: 'Final de carrera activado',
+                      message: 'Movimiento bloqueado por seguridad.',
+                      color: AppColors.danger,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                 ] else if (!state.isConnected &&
                     preferences.showWarnings &&
                     preferences.connectionLossAlerts) ...[
-                  SafetyBanner(
-                    icon: Icons.wifi_off_rounded,
-                    title: state.connection == ConnectionPhase.connecting
-                        ? 'Buscando ESP32…'
-                        : 'Sin conexión con BLANQUITA',
-                    message:
-                        'Conecta el teléfono a ${MachineController.wifiName} y vuelve a intentar.',
-                    color: state.connection == ConnectionPhase.connecting
-                        ? AppColors.warning
-                        : AppColors.danger,
-                    action: state.connection == ConnectionPhase.connecting
-                        ? null
-                        : machine.reconnect,
+                  MotionReveal(
+                    child: _ConnectionNotice(
+                      phase: state.connection,
+                      onReconnect: machine.reconnect,
+                    ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                 ],
-                GlassCard(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const SectionLabel('Cartesiano 1'),
-                                const SizedBox(height: 7),
-                                Text(
-                                  state.activeMovement?.label ??
-                                      (state.sequenceActive
-                                          ? 'Secuencia automática activa'
-                                          : 'En reposo'),
-                                  style: Theme.of(context).textTheme.titleLarge,
-                                ),
-                              ],
-                            ),
-                          ),
-                          _ModeChip(state: state),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        height: 250,
-                        child: CartesianVisualizer(state: state),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.035),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              size: 18,
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                            const SizedBox(width: 9),
-                            const Expanded(
-                              child: Text(
-                                'Representa actividad y dirección; no indica posición X/Z absoluta.',
-                                style: TextStyle(fontSize: 12),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                MotionReveal(
+                  delay: const Duration(milliseconds: 70),
+                  child: _MachineHero(state: state),
+                ),
+                const SizedBox(height: 16),
+                MotionReveal(
+                  delay: const Duration(milliseconds: 125),
+                  child: _StatusMatrix(state: state),
+                ),
+                const SizedBox(height: 24),
+                const SectionLabel('Actividad reciente'),
+                const SizedBox(height: 10),
+                MotionReveal(
+                  delay: const Duration(milliseconds: 170),
+                  child: _ActivityPanel(
+                    state: state,
+                    events: machine.events.take(4).toList(),
                   ),
                 ),
-                const SizedBox(height: 18),
-                const SectionLabel('Sensores'),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _SensorCard(
-                        icon: Icons.dinner_dining_rounded,
-                        label: 'Plato',
-                        value: _plateLabel(state.plateDetected),
-                        color: state.plateDetected == null
-                            ? Colors.blueGrey
-                            : state.plateDetected!
-                            ? AppColors.mint
-                            : AppColors.warning,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _SensorCard(
-                        icon: Icons.sensors_rounded,
-                        label: 'Final de carrera',
-                        value: _limitLabel(state.finalLimitActive),
-                        color: state.finalLimitActive == null
-                            ? Colors.blueGrey
-                            : state.finalLimitActive!
-                            ? AppColors.danger
-                            : AppColors.mint,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 14),
+                _ConnectionDetails(
+                  state: state,
+                  websocketUrl: machine.settingsWebsocketUrl,
                 ),
-                const SizedBox(height: 18),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final wide = constraints.maxWidth > 680;
-                    final machineCard = _MachineStatusCard(state: state);
-                    final connectionCard = _ConnectionCard(
-                      state: state,
-                      websocketUrl: context
-                          .read<MachineController>()
-                          .settingsWebsocketUrl,
-                    );
-                    if (!wide) {
-                      return Column(
-                        children: [
-                          machineCard,
-                          const SizedBox(height: 14),
-                          connectionCard,
-                        ],
-                      );
-                    }
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: machineCard),
-                        const SizedBox(width: 14),
-                        Expanded(child: connectionCard),
-                      ],
-                    );
-                  },
-                ),
-                const SizedBox(height: 18),
-                _RecentEvents(events: machine.events.take(5).toList()),
               ],
             ),
           ),
@@ -197,208 +91,403 @@ class DashboardScreen extends StatelessWidget {
       ),
     );
   }
-
-  static String _plateLabel(bool? value) => value == null
-      ? 'Sin datos'
-      : value
-      ? 'Detectado'
-      : 'Libre';
-  static String _limitLabel(bool? value) => value == null
-      ? 'Sin datos'
-      : value
-      ? 'Activado'
-      : 'Libre';
 }
 
-class _ModeChip extends StatelessWidget {
-  const _ModeChip({required this.state});
-  final MachineState state;
+class _ConnectionNotice extends StatelessWidget {
+  const _ConnectionNotice({required this.phase, required this.onReconnect});
+
+  final ConnectionPhase phase;
+  final VoidCallback onReconnect;
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = state.finalLimitActive == true
-        ? ('BLOQUEADO', AppColors.danger)
-        : state.sequenceActive
-        ? ('AUTO', AppColors.violet)
-        : state.activeMovement != null
-        ? ('MANUAL', AppColors.cyan)
-        : ('SEGURO', AppColors.mint);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 1.2,
-        ),
+    final connecting = phase == ConnectionPhase.connecting;
+    return GlassPanel(
+      padding: const EdgeInsets.fromLTRB(14, 11, 9, 11),
+      borderRadius: BorderRadius.circular(20),
+      tint: AppColors.warning.withValues(alpha: 0.075),
+      borderColor: AppColors.warning.withValues(alpha: 0.25),
+      child: Row(
+        children: [
+          Icon(
+            connecting
+                ? CupertinoIcons.antenna_radiowaves_left_right
+                : CupertinoIcons.wifi_slash,
+            size: 19,
+            color: AppColors.warning,
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Text(
+              connecting
+                  ? 'Buscando el ESP32 principal…'
+                  : 'Sin enlace. Conecta el teléfono a ${MachineController.wifiName}.',
+              maxLines: 2,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.68),
+              ),
+            ),
+          ),
+          if (!connecting)
+            IconButton(
+              tooltip: 'Reconectar',
+              onPressed: onReconnect,
+              icon: const Icon(CupertinoIcons.arrow_clockwise, size: 19),
+            ),
+        ],
       ),
     );
   }
 }
 
-class _SensorCard extends StatelessWidget {
-  const _SensorCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
+class _MachineHero extends StatelessWidget {
+  const _MachineHero({required this.state});
 
-  @override
-  Widget build(BuildContext context) => GlassCard(
-    padding: const EdgeInsets.all(16),
-    borderColor: color.withValues(alpha: 0.24),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const Spacer(),
-            StatusDot(color: color, size: 8),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.58),
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          value,
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(color: color),
-        ),
-      ],
-    ),
-  );
-}
-
-class _MachineStatusCard extends StatelessWidget {
-  const _MachineStatusCard({required this.state});
   final MachineState state;
 
   @override
-  Widget build(BuildContext context) => GlassCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionLabel('Máquina'),
-        const SizedBox(height: 16),
-        _DataLine('Movimiento', state.activeMovement?.label ?? 'Detenido'),
-        _DataLine('Pinza', _gripperLabel(state.gripper)),
-        _DataLine('Secuencia', _sequenceLabel(state)),
-        _DataLine('Último estado', state.lastStatus, last: true),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final activity = state.finalLimitActive == true
+        ? 'Bloqueada por seguridad'
+        : state.activeMovement?.label ??
+              (state.sequenceActive
+                  ? 'Secuencia automática activa'
+                  : 'Sistema en reposo');
+    final color = state.finalLimitActive == true
+        ? AppColors.danger
+        : state.activeMovement != null || state.sequenceActive
+        ? AppColors.cyan
+        : AppColors.mint;
 
-  String _gripperLabel(GripperState value) => switch (value) {
-    GripperState.unknown => 'Sin confirmar',
-    GripperState.opening => 'Abriendo…',
-    GripperState.open => 'Abierta',
-    GripperState.closing => 'Cerrando…',
-    GripperState.closed => 'Cerrada',
-  };
-
-  String _sequenceLabel(MachineState state) {
-    if (state.sequenceStep != null) {
-      return 'Paso ${state.sequenceStep}/8 · ${state.sequenceStepLabel ?? ''}';
-    }
-    return switch (state.sequence) {
-      SequencePhase.idle => 'Inactiva',
-      SequencePhase.requested => 'Solicitada',
-      SequencePhase.running => 'En curso',
-      SequencePhase.completed => 'Completada',
-      SequencePhase.cancelled => 'Cancelada',
-      SequencePhase.error => 'Con error',
-    };
+    return GlassPanel(
+      emphasis: GlassEmphasis.prominent,
+      padding: const EdgeInsets.fromLTRB(17, 16, 17, 14),
+      borderRadius: BorderRadius.circular(31),
+      borderColor: color.withValues(alpha: 0.20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Cartesiano 01',
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.46),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 240),
+                      child: Text(
+                        activity,
+                        key: ValueKey(activity),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              GlassChip(
+                color: color,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    StatusDot(color: color, size: 6),
+                    const SizedBox(width: 7),
+                    Text(
+                      state.finalLimitActive == true
+                          ? 'Seguro'
+                          : state.sequenceActive
+                          ? 'Auto'
+                          : state.activeMovement != null
+                          ? 'Manual'
+                          : 'Listo',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          SizedBox(
+            height: 238,
+            child: Stack(
+              children: [
+                Positioned.fill(child: CartesianVisualizer(state: state)),
+                Positioned(
+                  top: 17,
+                  left: 4,
+                  child: _AxisMark(
+                    label: 'Eje X',
+                    active: state.activeMovement?.axis == 'X',
+                  ),
+                ),
+                Positioned(
+                  right: 4,
+                  bottom: 26,
+                  child: _AxisMark(
+                    label: 'Eje Z',
+                    active: state.activeMovement?.axis == 'Z',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(13, 10, 13, 10),
+            decoration: BoxDecoration(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.028),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  CupertinoIcons.location_slash,
+                  size: 17,
+                  color: AppColors.steel,
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: Text(
+                    'Posición no calibrada',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.60),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                Text(
+                  'X / Z —',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: AppColors.steel,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
-class _ConnectionCard extends StatelessWidget {
-  const _ConnectionCard({required this.state, required this.websocketUrl});
-  final MachineState state;
-  final String websocketUrl;
+class _AxisMark extends StatelessWidget {
+  const _AxisMark({required this.label, required this.active});
+
+  final String label;
+  final bool active;
 
   @override
-  Widget build(BuildContext context) => GlassCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionLabel('Conexión'),
-        const SizedBox(height: 16),
-        _DataLine(
-          'WebSocket',
-          state.isConnected ? 'Conectado' : 'Desconectado',
-        ),
-        _DataLine('Destino', websocketUrl),
-        _DataLine('Último RX', state.lastMessage ?? 'Sin mensajes'),
-        _DataLine(
-          'Recibido',
-          state.lastReceivedAt == null
-              ? '—'
-              : _formatTime(state.lastReceivedAt!),
-          last: true,
-        ),
-      ],
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: const Duration(milliseconds: 180),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+    decoration: BoxDecoration(
+      color: (active ? AppColors.cyan : AppColors.steel).withValues(
+        alpha: 0.08,
+      ),
+      borderRadius: BorderRadius.circular(9),
+    ),
+    child: Text(
+      label,
+      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+        color: active ? AppColors.cyan : AppColors.steel,
+        fontWeight: FontWeight.w600,
+      ),
     ),
   );
-
-  String _formatTime(DateTime value) =>
-      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}:${value.second.toString().padLeft(2, '0')}';
 }
 
-class _DataLine extends StatelessWidget {
-  const _DataLine(this.label, this.value, {this.last = false});
+class _StatusMatrix extends StatelessWidget {
+  const _StatusMatrix({required this.state});
+
+  final MachineState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final cells = [
+      _StatusCellData(
+        label: 'ESP32',
+        value: state.isConnected ? 'Conectado' : 'Sin enlace',
+        icon: CupertinoIcons.antenna_radiowaves_left_right,
+        color: state.isConnected ? AppColors.mint : AppColors.danger,
+      ),
+      _StatusCellData(
+        label: 'Plato',
+        value: _boolLabel(state.plateDetected, 'Detectado', 'Libre'),
+        icon: CupertinoIcons.circle_grid_3x3,
+        color: state.plateDetected == true
+            ? AppColors.mint
+            : state.plateDetected == false
+            ? AppColors.steel
+            : AppColors.warning,
+      ),
+      _StatusCellData(
+        label: 'Final de carrera',
+        value: _boolLabel(state.finalLimitActive, 'Activado', 'Libre'),
+        icon: CupertinoIcons.stop_circle,
+        color: state.finalLimitActive == true
+            ? AppColors.danger
+            : state.finalLimitActive == false
+            ? AppColors.mint
+            : AppColors.warning,
+      ),
+      _StatusCellData(
+        label: 'Pinza',
+        value: _gripperLabel(state.gripper),
+        icon: CupertinoIcons.arrow_left_right,
+        color: state.gripper == GripperState.unknown
+            ? AppColors.warning
+            : AppColors.cyan,
+      ),
+    ];
+    return GlassPanel(
+      padding: EdgeInsets.zero,
+      emphasis: GlassEmphasis.quiet,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final wide = constraints.maxWidth >= 650;
+          if (wide) {
+            return Row(
+              children: [
+                for (var i = 0; i < cells.length; i++) ...[
+                  Expanded(child: _StatusCell(data: cells[i])),
+                  if (i != cells.length - 1) const _VerticalHairline(),
+                ],
+              ],
+            );
+          }
+          return Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(child: _StatusCell(data: cells[0])),
+                  const _VerticalHairline(),
+                  Expanded(child: _StatusCell(data: cells[1])),
+                ],
+              ),
+              const Divider(height: 1),
+              Row(
+                children: [
+                  Expanded(child: _StatusCell(data: cells[2])),
+                  const _VerticalHairline(),
+                  Expanded(child: _StatusCell(data: cells[3])),
+                ],
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  static String _boolLabel(bool? value, String yes, String no) => value == null
+      ? 'Sin datos'
+      : value
+      ? yes
+      : no;
+
+  static String _gripperLabel(GripperState value) => switch (value) {
+    GripperState.unknown => 'Sin confirmar',
+    GripperState.opening => 'Abriendo',
+    GripperState.open => 'Abierta',
+    GripperState.closing => 'Cerrando',
+    GripperState.closed => 'Cerrada',
+  };
+}
+
+class _StatusCellData {
+  const _StatusCellData({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
   final String label;
   final String value;
-  final bool last;
+  final IconData icon;
+  final Color color;
+}
+
+class _StatusCell extends StatelessWidget {
+  const _StatusCell({required this.data});
+
+  final _StatusCellData data;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: EdgeInsets.only(bottom: last ? 0 : 12),
+    padding: const EdgeInsets.fromLTRB(15, 14, 12, 15),
     child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SizedBox(
-          width: 92,
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(
-                context,
-              ).colorScheme.onSurface.withValues(alpha: 0.48),
-            ),
+        AnimatedContainer(
+          key: ValueKey('${data.label}-${data.value}'),
+          duration: const Duration(milliseconds: 260),
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: data.color.withValues(alpha: 0.095),
+            borderRadius: BorderRadius.circular(11),
           ),
+          child: Icon(data.icon, size: 17, color: data.color),
         ),
+        const SizedBox(width: 10),
         Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                data.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.42),
+                ),
+              ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: ScaleTransition(
+                    scale: Tween<double>(
+                      begin: 0.97,
+                      end: 1,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: Text(
+                  data.value,
+                  key: ValueKey(data.value),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(color: data.color),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -406,66 +495,202 @@ class _DataLine extends StatelessWidget {
   );
 }
 
-class _RecentEvents extends StatelessWidget {
-  const _RecentEvents({required this.events});
+class _VerticalHairline extends StatelessWidget {
+  const _VerticalHairline();
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: 1,
+    height: 48,
+    color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.055),
+  );
+}
+
+class _ActivityPanel extends StatelessWidget {
+  const _ActivityPanel({required this.state, required this.events});
+
+  final MachineState state;
   final List<MachineEvent> events;
 
   @override
-  Widget build(BuildContext context) => GlassCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionLabel('Actividad reciente'),
-        const SizedBox(height: 14),
-        if (events.isEmpty)
-          Text(
-            'Todavía no hay eventos.',
-            style: Theme.of(context).textTheme.bodySmall,
-          )
-        else
-          for (var i = 0; i < events.length; i++) ...[
-            _EventRow(event: events[i]),
-            if (i != events.length - 1) const Divider(height: 20),
-          ],
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final activeColor = state.finalLimitActive == true
+        ? AppColors.danger
+        : state.sequenceActive
+        ? AppColors.cyan
+        : AppColors.mint;
+    return GlassPanel(
+      padding: const EdgeInsets.fromLTRB(17, 17, 17, 15),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final current = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Ahora',
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(color: activeColor),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                state.lastStatus,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              if (state.sequenceStep != null) ...[
+                const SizedBox(height: 9),
+                Text(
+                  'Paso ${state.sequenceStep}/8 · ${state.sequenceStepLabel ?? 'En curso'}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: AppColors.cyan),
+                ),
+              ],
+            ],
+          );
+          final history = Column(
+            children: events.isEmpty
+                ? [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Aún no hay actividad registrada.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withValues(alpha: 0.44),
+                        ),
+                      ),
+                    ),
+                  ]
+                : [
+                    for (var i = 0; i < events.length; i++) ...[
+                      _EventRow(event: events[i]),
+                      if (i != events.length - 1) const Divider(height: 17),
+                    ],
+                  ],
+          );
+          if (constraints.maxWidth < 620) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                current,
+                const SizedBox(height: 18),
+                const Divider(),
+                history,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(flex: 4, child: current),
+              const SizedBox(width: 26),
+              Expanded(flex: 5, child: history),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _EventRow extends StatelessWidget {
   const _EventRow({required this.event});
+
   final MachineEvent event;
 
   @override
   Widget build(BuildContext context) {
     final color = switch (event.level) {
-      MachineEventLevel.info => AppColors.cyan,
+      MachineEventLevel.info => AppColors.steel,
       MachineEventLevel.success => AppColors.mint,
       MachineEventLevel.warning => AppColors.warning,
       MachineEventLevel.critical => AppColors.danger,
     };
-    final time =
-        '${event.timestamp.hour.toString().padLeft(2, '0')}:${event.timestamp.minute.toString().padLeft(2, '0')}:${event.timestamp.second.toString().padLeft(2, '0')}';
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        StatusDot(color: color, size: 7),
-        const SizedBox(width: 11),
+        Padding(
+          padding: const EdgeInsets.only(top: 5),
+          child: StatusDot(color: color, size: 6),
+        ),
+        const SizedBox(width: 10),
         Expanded(
           child: Text(
             event.message,
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Text(
-          time,
+          _time(event.timestamp),
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: Theme.of(
               context,
-            ).colorScheme.onSurface.withValues(alpha: 0.38),
+            ).colorScheme.onSurface.withValues(alpha: 0.34),
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
       ],
     );
   }
+
+  String _time(DateTime value) =>
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+}
+
+class _ConnectionDetails extends StatelessWidget {
+  const _ConnectionDetails({required this.state, required this.websocketUrl});
+
+  final MachineState state;
+  final String websocketUrl;
+
+  @override
+  Widget build(BuildContext context) => GlassPanel(
+    padding: const EdgeInsets.fromLTRB(15, 12, 15, 12),
+    emphasis: GlassEmphasis.quiet,
+    child: Row(
+      children: [
+        const Icon(CupertinoIcons.link, size: 17, color: AppColors.steel),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                websocketUrl,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelMedium,
+              ),
+              Text(
+                state.lastMessage == null
+                    ? 'Sin mensajes recibidos'
+                    : 'Último RX · ${state.lastMessage}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.38),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          state.lastReceivedAt == null ? '—' : _time(state.lastReceivedAt!),
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: AppColors.steel,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ],
+    ),
+  );
+
+  String _time(DateTime value) =>
+      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}:${value.second.toString().padLeft(2, '0')}';
 }

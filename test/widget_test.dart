@@ -32,7 +32,7 @@ void main() {
 
     await tester.tap(find.text('Control'));
     await tester.pumpAndSettle();
-    expect(find.text('MANDO SEGURO'), findsOneWidget);
+    expect(find.text('Mando seguro'), findsOneWidget);
 
     await tester.tap(find.text('Visión'));
     await tester.pumpAndSettle();

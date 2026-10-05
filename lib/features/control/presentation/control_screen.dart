@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,6 +7,7 @@ import '../../../core/models/machine_state.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../../../features/settings/controller/settings_controller.dart';
 import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/status_widgets.dart';
 import '../widgets/hold_to_move_button.dart';
@@ -21,172 +23,191 @@ class ControlScreen extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 132),
+        padding: const EdgeInsets.fromLTRB(18, 20, 18, 126),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 760),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                PageHeader(
-                  eyebrow: 'Mando seguro',
-                  title: 'Control',
-                  subtitle:
-                      'Mantén pulsada una dirección; al soltar se envía STOP.',
-                  trailing: ConnectionBadge(phase: state.connection),
+                MotionReveal(
+                  child: PageHeader(
+                    compact: true,
+                    eyebrow: 'Mando seguro',
+                    title: 'Control',
+                    subtitle: 'Mantén pulsada una dirección para mover.',
+                    trailing: ConnectionBadge(phase: state.connection),
+                  ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 15),
                 if (state.finalLimitActive == true) ...[
                   const SafetyBanner(
-                    icon: Icons.report_rounded,
+                    icon: CupertinoIcons.exclamationmark_triangle,
                     title: 'Final de carrera activado',
                     message:
-                        'Ejes y secuencia están bloqueados. Pinza, STOP y emergencia siguen disponibles.',
+                        'Movimiento bloqueado por seguridad. Pinza y STOP siguen disponibles.',
                     color: AppColors.danger,
                   ),
-                  const SizedBox(height: 14),
-                ] else if (!state.isConnected &&
-                    preferences.showWarnings &&
-                    preferences.connectionLossAlerts) ...[
-                  SafetyBanner(
-                    icon: Icons.link_off_rounded,
-                    title: 'Controles sin conexión',
-                    message:
-                        'Conéctate a ${MachineController.wifiName} para habilitar el mando.',
-                    color: AppColors.warning,
-                    action: state.connection == ConnectionPhase.connecting
-                        ? null
-                        : machine.reconnect,
-                  ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                 ],
-                GlassCard(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color:
-                              (machine.manualControlsLocked
-                                      ? AppColors.warning
-                                      : AppColors.mint)
-                                  .withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(
-                          machine.manualControlsLocked
-                              ? Icons.lock_rounded
-                              : Icons.lock_open_rounded,
-                          color: machine.manualControlsLocked
-                              ? AppColors.warning
-                              : AppColors.mint,
-                        ),
-                      ),
-                      const SizedBox(width: 13),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Control manual',
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            Text(
-                              machine.manualControlsLocked
-                                  ? 'Bloqueado contra toques accidentales'
-                                  : 'Desbloqueado · mantener para mover',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withValues(alpha: 0.54),
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Switch.adaptive(
-                        value: !machine.manualControlsLocked,
-                        onChanged: state.isConnected
-                            ? (value) => machine.setManualControlsLocked(!value)
-                            : null,
-                      ),
-                    ],
+                MotionReveal(
+                  delay: const Duration(milliseconds: 60),
+                  child: _ControlConsole(
+                    machine: machine,
+                    showConnectionHint:
+                        !state.isConnected &&
+                        preferences.showWarnings &&
+                        preferences.connectionLossAlerts,
                   ),
                 ),
                 const SizedBox(height: 16),
-                GlassCard(
-                  padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
-                  child: Column(
-                    children: [
-                      Row(
-                        children: [
-                          const Expanded(
-                            child: SectionLabel('Movimiento X / Z'),
-                          ),
-                          Text(
-                            state.activeMovement?.axis == null
-                                ? 'EN REPOSO'
-                                : 'EJE ${state.activeMovement!.axis} ACTIVO',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(
-                                  color: state.activeMovement == null
-                                      ? AppColors.mint
-                                      : AppColors.cyan,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      _ControlPad(machine: machine),
-                      const SizedBox(height: 18),
-                      Text(
-                        'Heartbeat activo cada 200 ms durante el movimiento',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.48),
-                        ),
-                      ),
-                    ],
-                  ),
+                MotionReveal(
+                  delay: const Duration(milliseconds: 115),
+                  child: _ToolDeck(machine: machine),
                 ),
                 const SizedBox(height: 16),
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final wide = constraints.maxWidth > 610;
-                    final gripper = _GripperPanel(machine: machine);
-                    final speed = _SpeedPanel(machine: machine);
-                    return wide
-                        ? Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(child: gripper),
-                              const SizedBox(width: 14),
-                              Expanded(child: speed),
-                            ],
-                          )
-                        : Column(
-                            children: [
-                              gripper,
-                              const SizedBox(height: 14),
-                              speed,
-                            ],
-                          );
-                  },
+                MotionReveal(
+                  delay: const Duration(milliseconds: 165),
+                  child: _SequencePanel(machine: machine),
                 ),
-                const SizedBox(height: 16),
-                _SequencePanel(machine: machine),
-                const SizedBox(height: 16),
-                _EmergencyPanel(machine: machine),
+                const SizedBox(height: 14),
+                _EmergencyDock(machine: machine),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ControlConsole extends StatelessWidget {
+  const _ControlConsole({
+    required this.machine,
+    required this.showConnectionHint,
+  });
+
+  final MachineController machine;
+  final bool showConnectionHint;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = machine.state;
+    final locked = machine.manualControlsLocked;
+    final accent = state.finalLimitActive == true
+        ? AppColors.danger
+        : state.activeMovement != null
+        ? AppColors.cyan
+        : locked
+        ? AppColors.warning
+        : AppColors.mint;
+    return GlassPanel(
+      emphasis: GlassEmphasis.prominent,
+      padding: const EdgeInsets.fromLTRB(15, 14, 15, 16),
+      borderRadius: BorderRadius.circular(31),
+      borderColor: accent.withValues(alpha: 0.22),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      state.activeMovement == null
+                          ? 'Movimiento manual'
+                          : state.activeMovement!.label,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      state.activeMovement == null
+                          ? 'Heartbeat listo · 200 ms'
+                          : 'Motor activo · suelta para detener',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelSmall?.copyWith(color: accent),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Semantics(
+                button: true,
+                label: locked
+                    ? 'Desbloquear control manual'
+                    : 'Bloquear control manual',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: state.isConnected
+                      ? () => machine.setManualControlsLocked(!locked)
+                      : null,
+                  child: GlassChip(
+                    color: locked ? AppColors.warning : AppColors.mint,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          locked
+                              ? CupertinoIcons.lock_fill
+                              : CupertinoIcons.lock_open,
+                          size: 14,
+                          color: locked ? AppColors.warning : AppColors.mint,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          locked ? 'Bloqueado' : 'Armado',
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: locked
+                                    ? AppColors.warning
+                                    : AppColors.mint,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (showConnectionHint) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+              decoration: BoxDecoration(
+                color: AppColors.warning.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    CupertinoIcons.wifi_slash,
+                    size: 16,
+                    color: AppColors.warning,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Conecta el teléfono a CARTESIANO_ESP32.',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                  ),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: 'Reconectar',
+                    onPressed: machine.reconnect,
+                    icon: const Icon(CupertinoIcons.arrow_clockwise, size: 17),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          _ControlPad(machine: machine),
+        ],
       ),
     );
   }
@@ -203,27 +224,27 @@ class _ControlPad extends StatelessWidget {
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 410),
       child: AspectRatio(
-        aspectRatio: 1.22,
+        aspectRatio: 1.13,
         child: GridView.count(
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 3,
-          childAspectRatio: 1.2,
-          mainAxisSpacing: 10,
-          crossAxisSpacing: 10,
+          childAspectRatio: 1.18,
+          mainAxisSpacing: 9,
+          crossAxisSpacing: 9,
           children: [
             const SizedBox.shrink(),
             HoldToMoveButton(
               movement: MovementDirection.zUp,
-              icon: Icons.keyboard_arrow_up_rounded,
-              label: 'SUBIR Z',
+              icon: CupertinoIcons.chevron_up,
+              label: 'Subir Z',
               enabled: enabled || state.activeMovement == MovementDirection.zUp,
               active: state.activeMovement == MovementDirection.zUp,
             ),
             const SizedBox.shrink(),
             HoldToMoveButton(
               movement: MovementDirection.xLeft,
-              icon: Icons.keyboard_arrow_left_rounded,
-              label: 'IZQUIERDA',
+              icon: CupertinoIcons.chevron_left,
+              label: 'Izquierda',
               enabled:
                   enabled || state.activeMovement == MovementDirection.xLeft,
               active: state.activeMovement == MovementDirection.xLeft,
@@ -231,8 +252,8 @@ class _ControlPad extends StatelessWidget {
             _StopButton(enabled: state.isConnected, onPressed: machine.stopNow),
             HoldToMoveButton(
               movement: MovementDirection.xRight,
-              icon: Icons.keyboard_arrow_right_rounded,
-              label: 'DERECHA',
+              icon: CupertinoIcons.chevron_right,
+              label: 'Derecha',
               enabled:
                   enabled || state.activeMovement == MovementDirection.xRight,
               active: state.activeMovement == MovementDirection.xRight,
@@ -240,8 +261,8 @@ class _ControlPad extends StatelessWidget {
             const SizedBox.shrink(),
             HoldToMoveButton(
               movement: MovementDirection.zDown,
-              icon: Icons.keyboard_arrow_down_rounded,
-              label: 'BAJAR Z',
+              icon: CupertinoIcons.chevron_down,
+              label: 'Bajar Z',
               enabled:
                   enabled || state.activeMovement == MovementDirection.zDown,
               active: state.activeMovement == MovementDirection.zDown,
@@ -254,44 +275,74 @@ class _ControlPad extends StatelessWidget {
   }
 }
 
-class _StopButton extends StatelessWidget {
+class _StopButton extends StatefulWidget {
   const _StopButton({required this.enabled, required this.onPressed});
   final bool enabled;
   final VoidCallback onPressed;
 
   @override
+  State<_StopButton> createState() => _StopButtonState();
+}
+
+class _StopButtonState extends State<_StopButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) => Semantics(
     button: true,
-    label: 'Detener movimiento',
-    child: InkWell(
-      borderRadius: BorderRadius.circular(50),
-      onTap: enabled ? onPressed : null,
-      child: AnimatedOpacity(
-        opacity: enabled ? 1 : 0.28,
-        duration: const Duration(milliseconds: 150),
-        child: Container(
-          margin: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: AppColors.warning.withValues(alpha: 0.12),
-            border: Border.all(
-              color: AppColors.warning.withValues(alpha: 0.45),
-            ),
-          ),
-          child: const Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.stop_rounded, color: AppColors.warning, size: 30),
-              Text(
-                'STOP',
-                style: TextStyle(
-                  color: AppColors.warning,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
-                ),
+    enabled: widget.enabled,
+    label: 'STOP, detener movimiento manual',
+    child: GestureDetector(
+      onTapDown: widget.enabled ? (_) => setState(() => _pressed = true) : null,
+      onTapCancel: widget.enabled
+          ? () => setState(() => _pressed = false)
+          : null,
+      onTapUp: widget.enabled ? (_) => setState(() => _pressed = false) : null,
+      onTap: widget.enabled ? widget.onPressed : null,
+      child: AnimatedScale(
+        scale: _pressed ? 0.94 : 1,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOutCubic,
+        child: AnimatedOpacity(
+          opacity: widget.enabled ? 1 : 0.28,
+          duration: const Duration(milliseconds: 160),
+          child: Container(
+            margin: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.danger.withValues(alpha: 0.11),
+              border: Border.all(
+                color: AppColors.danger.withValues(alpha: 0.40),
               ),
-            ],
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.danger.withValues(
+                    alpha: _pressed ? 0.17 : 0.06,
+                  ),
+                  blurRadius: _pressed ? 17 : 10,
+                ),
+              ],
+            ),
+            child: const Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  CupertinoIcons.stop_fill,
+                  color: AppColors.danger,
+                  size: 25,
+                ),
+                SizedBox(height: 3),
+                Text(
+                  'STOP',
+                  style: TextStyle(
+                    color: AppColors.danger,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -299,131 +350,158 @@ class _StopButton extends StatelessWidget {
   );
 }
 
-class _GripperPanel extends StatelessWidget {
-  const _GripperPanel({required this.machine});
+class _ToolDeck extends StatelessWidget {
+  const _ToolDeck({required this.machine});
   final MachineController machine;
 
   @override
-  Widget build(BuildContext context) => GlassCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionLabel(
-          'Pinza',
-          trailing: Text(
-            _gripperLabel(machine.state.gripper),
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: AppColors.mint,
-              fontWeight: FontWeight.w800,
-            ),
+  Widget build(BuildContext context) {
+    return GlassPanel(
+      padding: const EdgeInsets.fromLTRB(17, 17, 17, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Expanded(child: SectionLabel('Pinza')),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: Text(
+                  _gripperLabel(machine.state.gripper),
+                  key: ValueKey(machine.state.gripper),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(color: AppColors.cyan),
+                ),
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: GlassButton(
-                onPressed: machine.canUseAuxiliaryControls
-                    ? machine.openGripper
-                    : null,
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          const SizedBox(height: 13),
+          Row(
+            children: [
+              Expanded(
+                child: GlassButton(
+                  onPressed: machine.canUseAuxiliaryControls
+                      ? machine.openGripper
+                      : null,
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.arrow_left_right, size: 17),
+                      SizedBox(width: 8),
+                      Text('Abrir'),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GlassButton(
+                  onPressed: machine.canUseAuxiliaryControls
+                      ? machine.closeGripper
+                      : null,
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.arrow_right_arrow_left, size: 17),
+                      SizedBox(width: 8),
+                      Text('Cerrar'),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(height: 1),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.open_in_full_rounded, size: 19),
-                    SizedBox(width: 8),
-                    Text('Abrir'),
+                    const SectionLabel('Velocidad'),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Ajuste solicitado, sin telemetría absoluta',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.38),
+                      ),
+                    ),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: GlassButton(
-                onPressed: machine.canUseAuxiliaryControls
-                    ? machine.closeGripper
+              const SizedBox(width: 10),
+              _CompactAction(
+                icon: CupertinoIcons.minus,
+                tooltip: 'Más lento',
+                onTap: machine.canUseAuxiliaryControls
+                    ? machine.requestSlower
                     : null,
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.close_fullscreen_rounded, size: 19),
-                    SizedBox(width: 8),
-                    Text('Cerrar'),
-                  ],
-                ),
               ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
+              const SizedBox(width: 8),
+              _CompactAction(
+                icon: CupertinoIcons.plus,
+                tooltip: 'Más rápido',
+                onTap: machine.canUseAuxiliaryControls
+                    ? machine.requestFaster
+                    : null,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   String _gripperLabel(GripperState value) => switch (value) {
-    GripperState.unknown => 'SIN CONFIRMAR',
-    GripperState.opening => 'ABRIENDO',
-    GripperState.open => 'ABIERTA',
-    GripperState.closing => 'CERRANDO',
-    GripperState.closed => 'CERRADA',
+    GripperState.unknown => 'Sin confirmar',
+    GripperState.opening => 'Abriendo',
+    GripperState.open => 'Abierta',
+    GripperState.closing => 'Cerrando',
+    GripperState.closed => 'Cerrada',
   };
 }
 
-class _SpeedPanel extends StatelessWidget {
-  const _SpeedPanel({required this.machine});
-  final MachineController machine;
+class _CompactAction extends StatelessWidget {
+  const _CompactAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onTap;
 
   @override
-  Widget build(BuildContext context) => GlassCard(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SectionLabel('Velocidad solicitada'),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: GlassButton(
-                onPressed: machine.canUseAuxiliaryControls
-                    ? machine.requestSlower
-                    : null,
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.remove),
-                    SizedBox(width: 6),
-                    Text('Lento'),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: GlassButton(
-                onPressed: machine.canUseAuxiliaryControls
-                    ? machine.requestFaster
-                    : null,
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('Rápido'),
-                    SizedBox(width: 6),
-                    Icon(Icons.add),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 9),
-        Text(
-          'El ESP32 no confirma un valor absoluto.',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    child: Opacity(
+      opacity: onTap == null ? 0.34 : 1,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: onTap,
+        child: Container(
+          width: 47,
+          height: 47,
+          decoration: BoxDecoration(
             color: Theme.of(
               context,
-            ).colorScheme.onSurface.withValues(alpha: 0.42),
+            ).colorScheme.onSurface.withValues(alpha: 0.045),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: Theme.of(
+                context,
+              ).colorScheme.onSurface.withValues(alpha: 0.08),
+            ),
           ),
+          child: Icon(icon, size: 18),
         ),
-      ],
+      ),
     ),
   );
 }
@@ -433,118 +511,76 @@ class _SequencePanel extends StatelessWidget {
   final MachineController machine;
 
   static const steps = [
-    'Z bajando',
-    'Cerrando pinza',
-    'Z subiendo',
-    'X derecha',
-    'Z bajando',
-    'Abriendo pinza',
-    'Z subiendo',
-    'X izquierda',
+    'Bajar eje Z',
+    'Cerrar pinza',
+    'Subir eje Z',
+    'Mover X a la derecha',
+    'Bajar eje Z',
+    'Abrir pinza',
+    'Subir eje Z',
+    'Mover X a la izquierda',
   ];
 
   @override
   Widget build(BuildContext context) {
     final state = machine.state;
-    return GlassCard(
+    return GlassPanel(
+      padding: const EdgeInsets.fromLTRB(17, 17, 17, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
-              const Expanded(child: SectionLabel('Automático')),
+              const Expanded(child: SectionLabel('Secuencia automática')),
               if (state.sequenceActive)
-                const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                GlassChip(
+                  color: AppColors.cyan,
+                  child: Text(
+                    state.sequenceStep == null
+                        ? 'Preparando'
+                        : '${state.sequenceStep}/8',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: AppColors.cyan),
+                  ),
                 ),
             ],
           ),
-          const SizedBox(height: 14),
-          if (state.sequence != SequencePhase.idle) ...[
-            SizedBox(
-              height: 56,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: steps.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 7),
-                itemBuilder: (context, index) {
-                  final number = index + 1;
-                  final current = state.sequenceStep == number;
-                  final complete =
-                      state.sequence == SequencePhase.completed ||
-                      (state.sequenceStep ?? 0) > number;
-                  final color = current
-                      ? AppColors.cyan
-                      : complete
-                      ? AppColors.mint
-                      : Theme.of(
-                          context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.28);
-                  return Container(
-                    width: 118,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: color.withValues(alpha: 0.26)),
-                    ),
-                    child: Row(
-                      children: [
-                        Text(
-                          '$number',
-                          style: TextStyle(
-                            color: color,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(width: 7),
-                        Expanded(
-                          child: Text(
-                            steps[index],
-                            maxLines: 2,
-                            style: const TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+          const SizedBox(height: 16),
+          for (var i = 0; i < steps.length; i++)
+            _TimelineStep(
+              index: i + 1,
+              label: steps[i],
+              isLast: i == steps.length - 1,
+              current: state.sequenceStep == i + 1,
+              complete:
+                  state.sequence == SequencePhase.completed ||
+                  (state.sequenceStep ?? 0) > i + 1,
+              cancelled: state.sequence == SequencePhase.cancelled,
             ),
-            const SizedBox(height: 14),
-          ],
+          const SizedBox(height: 14),
           FilledButton.icon(
             onPressed: machine.canStartSequence
                 ? () => _confirmAndStart(context, machine)
                 : null,
             icon: Icon(
               state.sequenceActive
-                  ? Icons.hourglass_top_rounded
-                  : Icons.play_arrow_rounded,
+                  ? CupertinoIcons.hourglass
+                  : CupertinoIcons.play_fill,
+              size: 18,
             ),
-            label: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Text(
-                state.sequenceActive
-                    ? 'SECUENCIA EN CURSO'
-                    : 'EJECUTAR SECUENCIA',
-              ),
+            label: Text(
+              state.sequenceActive
+                  ? 'Secuencia en curso'
+                  : 'Ejecutar secuencia',
             ),
           ),
           if (state.sequenceActive) ...[
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
+            const SizedBox(height: 9),
+            TextButton.icon(
               onPressed: machine.emergencyStop,
-              icon: const Icon(Icons.cancel_outlined),
-              label: const Text('CANCELAR SECUENCIA'),
+              icon: const Icon(CupertinoIcons.xmark_circle, size: 18),
+              label: const Text('Cancelar secuencia'),
             ),
           ],
         ],
@@ -564,19 +600,19 @@ class _SequencePanel extends StatelessWidget {
     final accepted = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        icon: const Icon(Icons.play_circle_outline_rounded),
-        title: const Text('Iniciar secuencia automática'),
+        icon: const Icon(CupertinoIcons.play_circle),
+        title: const Text('Iniciar secuencia'),
         content: const Text(
           'Verifica que el área esté libre. El ESP32 ejecutará los ocho pasos de forma autónoma.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCELAR'),
+            child: const Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('INICIAR'),
+            child: const Text('Iniciar'),
           ),
         ],
       ),
@@ -585,35 +621,161 @@ class _SequencePanel extends StatelessWidget {
   }
 }
 
-class _EmergencyPanel extends StatelessWidget {
-  const _EmergencyPanel({required this.machine});
+class _TimelineStep extends StatelessWidget {
+  const _TimelineStep({
+    required this.index,
+    required this.label,
+    required this.isLast,
+    required this.current,
+    required this.complete,
+    required this.cancelled,
+  });
+
+  final int index;
+  final String label;
+  final bool isLast;
+  final bool current;
+  final bool complete;
+  final bool cancelled;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = complete
+        ? AppColors.mint
+        : current
+        ? AppColors.cyan
+        : cancelled
+        ? AppColors.danger.withValues(alpha: 0.55)
+        : AppColors.steel.withValues(alpha: 0.42);
+    return SizedBox(
+      height: isLast ? 36 : 43,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 28,
+            child: Column(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 240),
+                  width: current ? 18 : 16,
+                  height: current ? 18 : 16,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: color.withValues(alpha: current ? 0.20 : 0.09),
+                    border: Border.all(color: color, width: current ? 2 : 1),
+                    boxShadow: current
+                        ? [
+                            BoxShadow(
+                              color: color.withValues(alpha: 0.17),
+                              blurRadius: 12,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: complete
+                      ? Icon(CupertinoIcons.checkmark, size: 10, color: color)
+                      : current
+                      ? Center(
+                          child: Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: color,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        )
+                      : null,
+                ),
+                if (!isLast)
+                  Expanded(
+                    child: Container(
+                      width: 1,
+                      margin: const EdgeInsets.symmetric(vertical: 3),
+                      color: color.withValues(alpha: 0.30),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: current
+                    ? Theme.of(context).colorScheme.onSurface
+                    : Theme.of(
+                        context,
+                      ).colorScheme.onSurface.withValues(alpha: 0.54),
+                fontWeight: current ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+          Text(
+            index.toString().padLeft(2, '0'),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmergencyDock extends StatelessWidget {
+  const _EmergencyDock({required this.machine});
   final MachineController machine;
 
   @override
-  Widget build(BuildContext context) => GlassCard(
-    tint: AppColors.danger.withValues(alpha: 0.08),
+  Widget build(BuildContext context) => GlassPanel(
+    padding: const EdgeInsets.fromLTRB(12, 11, 11, 11),
+    borderRadius: BorderRadius.circular(22),
+    tint: AppColors.danger.withValues(alpha: 0.065),
     borderColor: AppColors.danger.withValues(alpha: 0.28),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    child: Row(
       children: [
-        const SectionLabel('Seguridad'),
-        const SizedBox(height: 14),
-        FilledButton.icon(
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: AppColors.danger.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(13),
+          ),
+          child: const Icon(
+            CupertinoIcons.exclamationmark,
+            color: AppColors.danger,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Emergencia', style: Theme.of(context).textTheme.titleSmall),
+              Text(
+                'Cancela movimiento y secuencia',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.44),
+                ),
+              ),
+            ],
+          ),
+        ),
+        FilledButton(
           style: FilledButton.styleFrom(
             backgroundColor: AppColors.danger,
             foregroundColor: Colors.white,
-            disabledBackgroundColor: AppColors.danger.withValues(alpha: 0.18),
-            minimumSize: const Size.fromHeight(66),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
+            minimumSize: const Size(94, 46),
+            padding: const EdgeInsets.symmetric(horizontal: 17),
           ),
           onPressed: machine.state.isConnected ? machine.emergencyStop : null,
-          icon: const Icon(Icons.emergency_share_rounded, size: 29),
-          label: const Text(
-            'PARADA DE EMERGENCIA',
-            style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 0.6),
-          ),
+          child: const Text('DETENER'),
         ),
       ],
     ),

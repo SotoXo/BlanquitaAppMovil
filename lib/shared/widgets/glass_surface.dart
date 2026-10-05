@@ -7,16 +7,20 @@ import '../../app/theme/app_theme.dart';
 import '../../features/settings/controller/app_settings.dart';
 import '../../features/settings/controller/settings_controller.dart';
 
+enum GlassEmphasis { quiet, standard, prominent }
+
 class GlassSurface extends StatelessWidget {
   const GlassSurface({
     super.key,
     required this.child,
     this.padding,
     this.margin,
-    this.borderRadius = const BorderRadius.all(Radius.circular(24)),
+    this.borderRadius = const BorderRadius.all(Radius.circular(26)),
     this.tint,
     this.borderColor,
     this.elevation = 1,
+    this.blur = false,
+    this.emphasis = GlassEmphasis.standard,
   });
 
   final Widget child;
@@ -26,101 +30,214 @@ class GlassSurface extends StatelessWidget {
   final Color? tint;
   final Color? borderColor;
   final double elevation;
+  final bool blur;
+  final GlassEmphasis emphasis;
 
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsController>().settings;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final glassOn = settings.glassEnabled && !settings.performanceMode;
+    final blurOn = glassOn && blur;
     final sigma = switch (settings.glassIntensity) {
-      GlassIntensity.low => 7.0,
-      GlassIntensity.medium => 12.0,
-      GlassIntensity.high => 18.0,
+      GlassIntensity.low => 6.0,
+      GlassIntensity.medium => 10.0,
+      GlassIntensity.high => 14.0,
     };
-    final baseTint =
+    final alpha = switch (emphasis) {
+      GlassEmphasis.quiet => isDark ? 0.042 : 0.48,
+      GlassEmphasis.standard => isDark ? 0.068 : 0.66,
+      GlassEmphasis.prominent => isDark ? 0.102 : 0.82,
+    };
+    final coreTint =
         tint ??
         (isDark
-            ? Colors.white.withValues(alpha: glassOn ? 0.065 : 0.085)
-            : Colors.white.withValues(alpha: glassOn ? 0.55 : 0.86));
-    final border =
+            ? AppColors.graphiteRaised.withValues(alpha: alpha + 0.72)
+            : Colors.white.withValues(alpha: alpha));
+    final rimColor =
         borderColor ??
         (isDark
-            ? Colors.white.withValues(alpha: 0.12)
-            : Colors.white.withValues(alpha: 0.9));
+            ? Colors.white.withValues(
+                alpha: emphasis == GlassEmphasis.prominent ? 0.17 : 0.11,
+              )
+            : Colors.white.withValues(alpha: 0.88));
+    final innerRadius = _insetRadius(borderRadius, 1.25);
 
-    Widget content = DecoratedBox(
+    Widget core = DecoratedBox(
       decoration: BoxDecoration(
-        color: baseTint,
-        borderRadius: borderRadius,
-        border: Border.all(color: border),
-        boxShadow: elevation <= 0
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withValues(
-                    alpha: isDark ? 0.18 * elevation : 0.07 * elevation,
-                  ),
-                  blurRadius: settings.performanceMode ? 8 : 22,
-                  offset: const Offset(0, 10),
-                ),
-                if (glassOn)
-                  BoxShadow(
-                    color: Colors.white.withValues(alpha: isDark ? 0.025 : 0.2),
-                    blurRadius: 2,
-                    offset: const Offset(0, -1),
-                  ),
-              ],
+        color: coreTint,
+        borderRadius: innerRadius,
         gradient: glassOn
             ? LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
+                stops: const [0, 0.34, 1],
                 colors: [
-                  Colors.white.withValues(alpha: isDark ? 0.07 : 0.52),
-                  baseTint,
-                  AppColors.cyan.withValues(alpha: isDark ? 0.018 : 0.025),
+                  Colors.white.withValues(alpha: isDark ? 0.072 : 0.55),
+                  coreTint,
+                  AppColors.cyan.withValues(alpha: isDark ? 0.015 : 0.022),
                 ],
               )
             : null,
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+      child: Stack(
+        children: [
+          Positioned(
+            top: 0,
+            left: 18,
+            right: 18,
+            height: 1,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      Colors.white.withValues(alpha: isDark ? 0.26 : 0.86),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Material(
+            type: MaterialType.transparency,
+            child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+          ),
+        ],
       ),
     );
 
-    if (glassOn) {
-      content = ClipRRect(
-        borderRadius: borderRadius,
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-          child: content,
-        ),
+    if (blurOn) {
+      core = BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+        child: core,
       );
     }
 
-    return Padding(padding: margin ?? EdgeInsets.zero, child: content);
+    final shell = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: isDark ? 0.20 : 0.94),
+            rimColor,
+            AppColors.cyan.withValues(alpha: isDark ? 0.085 : 0.11),
+            Colors.white.withValues(alpha: isDark ? 0.045 : 0.68),
+          ],
+        ),
+        boxShadow: elevation <= 0
+            ? null
+            : [
+                BoxShadow(
+                  color: (isDark ? const Color(0xFF001016) : AppColors.steel)
+                      .withValues(
+                        alpha: settings.performanceMode
+                            ? 0.10
+                            : 0.18 * elevation,
+                      ),
+                  blurRadius: settings.performanceMode ? 10 : 25,
+                  offset: const Offset(0, 13),
+                ),
+                if (glassOn && emphasis == GlassEmphasis.prominent)
+                  BoxShadow(
+                    color: AppColors.cyan.withValues(alpha: 0.035),
+                    blurRadius: 30,
+                    spreadRadius: -4,
+                  ),
+              ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(1.25),
+        child: ClipRRect(borderRadius: innerRadius, child: core),
+      ),
+    );
+
+    return Padding(padding: margin ?? EdgeInsets.zero, child: shell);
+  }
+
+  BorderRadius _insetRadius(BorderRadius radius, double inset) {
+    Radius shrink(Radius value) => Radius.elliptical(
+      (value.x - inset).clamp(0, double.infinity),
+      (value.y - inset).clamp(0, double.infinity),
+    );
+    return BorderRadius.only(
+      topLeft: shrink(radius.topLeft),
+      topRight: shrink(radius.topRight),
+      bottomLeft: shrink(radius.bottomLeft),
+      bottomRight: shrink(radius.bottomRight),
+    );
   }
 }
 
-class GlassCard extends StatelessWidget {
-  const GlassCard({
+class GlassPanel extends StatelessWidget {
+  const GlassPanel({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(20),
     this.tint,
     this.borderColor,
+    this.emphasis = GlassEmphasis.standard,
+    this.blur = false,
+    this.borderRadius = const BorderRadius.all(Radius.circular(26)),
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
   final Color? tint;
   final Color? borderColor;
+  final GlassEmphasis emphasis;
+  final bool blur;
+  final BorderRadius borderRadius;
 
   @override
   Widget build(BuildContext context) => GlassSurface(
     padding: padding,
     tint: tint,
     borderColor: borderColor,
+    emphasis: emphasis,
+    blur: blur,
+    borderRadius: borderRadius,
+    child: child,
+  );
+}
+
+class GlassCard extends GlassPanel {
+  const GlassCard({
+    super.key,
+    required super.child,
+    super.padding,
+    super.tint,
+    super.borderColor,
+    super.emphasis,
+    super.blur,
+    super.borderRadius,
+  });
+}
+
+class GlassChip extends StatelessWidget {
+  const GlassChip({
+    super.key,
+    required this.child,
+    this.color,
+    this.padding = const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+  });
+
+  final Widget child;
+  final Color? color;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) => GlassSurface(
+    padding: padding,
+    borderRadius: BorderRadius.circular(14),
+    tint: color?.withValues(alpha: 0.09),
+    borderColor: color?.withValues(alpha: 0.28),
+    emphasis: GlassEmphasis.quiet,
+    elevation: 0,
     child: child,
   );
 }
@@ -131,7 +248,7 @@ class GlassButton extends StatefulWidget {
     required this.child,
     required this.onPressed,
     this.color,
-    this.padding = const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+    this.padding = const EdgeInsets.symmetric(horizontal: 18, vertical: 15),
     this.expanded = false,
     this.semanticLabel,
   });
@@ -149,34 +266,46 @@ class GlassButton extends StatefulWidget {
 
 class _GlassButtonState extends State<GlassButton> {
   bool _pressed = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null;
+    final settings = context.watch<SettingsController>().settings;
     final reduceMotion =
-        context.watch<SettingsController>().settings.reduceMotion ||
+        settings.reduceMotion ||
+        settings.performanceMode ||
         MediaQuery.disableAnimationsOf(context);
+    final foreground = widget.color ?? Theme.of(context).colorScheme.onSurface;
     final content = AnimatedScale(
       scale: _pressed && enabled ? 0.975 : 1,
       duration: reduceMotion
           ? Duration.zero
-          : const Duration(milliseconds: 120),
-      child: Opacity(
-        opacity: enabled ? 1 : 0.38,
-        child: GlassSurface(
-          borderRadius: BorderRadius.circular(18),
-          padding: widget.padding,
-          tint: widget.color?.withValues(alpha: 0.16),
-          borderColor: widget.color?.withValues(alpha: 0.38),
-          elevation: 0.5,
-          child: DefaultTextStyle.merge(
-            style: TextStyle(
-              color: widget.color ?? Theme.of(context).colorScheme.onSurface,
-              fontWeight: FontWeight.w700,
-            ),
-            child: IconTheme.merge(
-              data: IconThemeData(color: widget.color),
-              child: Center(child: widget.child),
+          : const Duration(milliseconds: 170),
+      curve: Curves.easeOutCubic,
+      child: AnimatedSlide(
+        offset: _pressed && enabled ? const Offset(0, 0.018) : Offset.zero,
+        duration: reduceMotion
+            ? Duration.zero
+            : const Duration(milliseconds: 170),
+        curve: Curves.easeOutCubic,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.36,
+          child: GlassSurface(
+            borderRadius: BorderRadius.circular(18),
+            padding: widget.padding,
+            tint: widget.color?.withValues(alpha: _pressed ? 0.19 : 0.11),
+            borderColor: _focused
+                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.72)
+                : widget.color?.withValues(alpha: 0.32),
+            emphasis: _pressed ? GlassEmphasis.prominent : GlassEmphasis.quiet,
+            elevation: _pressed ? 0 : 0.45,
+            child: DefaultTextStyle.merge(
+              style: TextStyle(color: foreground, fontWeight: FontWeight.w600),
+              child: IconTheme.merge(
+                data: IconThemeData(color: foreground, size: 20),
+                child: Center(child: widget.child),
+              ),
             ),
           ),
         ),
@@ -187,17 +316,31 @@ class _GlassButtonState extends State<GlassButton> {
       button: true,
       enabled: enabled,
       label: widget.semanticLabel,
-      child: MouseRegion(
-        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
-          onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
-          onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
-          onTap: widget.onPressed,
-          child: widget.expanded
-              ? SizedBox(width: double.infinity, child: content)
-              : content,
+      child: FocusableActionDetector(
+        enabled: enabled,
+        onShowFocusHighlight: (value) => setState(() => _focused = value),
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              widget.onPressed?.call();
+              return null;
+            },
+          ),
+        },
+        child: MouseRegion(
+          cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+            onTapCancel: enabled
+                ? () => setState(() => _pressed = false)
+                : null,
+            onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+            onTap: widget.onPressed,
+            child: widget.expanded
+                ? SizedBox(width: double.infinity, child: content)
+                : content,
+          ),
         ),
       ),
     );

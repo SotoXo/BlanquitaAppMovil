@@ -36,17 +36,13 @@ class ConnectionBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (phase) {
-      ConnectionPhase.connected => ('ONLINE', AppColors.mint),
-      ConnectionPhase.connecting => ('CONECTANDO', AppColors.warning),
-      ConnectionPhase.error => ('ERROR', AppColors.danger),
-      ConnectionPhase.disconnected => ('OFFLINE', AppColors.danger),
+      ConnectionPhase.connected => ('Online', AppColors.mint),
+      ConnectionPhase.connecting => ('Conectando', AppColors.warning),
+      ConnectionPhase.error => ('Error', AppColors.danger),
+      ConnectionPhase.disconnected => ('Offline', AppColors.danger),
     };
-    return GlassSurface(
-      borderRadius: BorderRadius.circular(30),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      tint: color.withValues(alpha: 0.10),
-      borderColor: color.withValues(alpha: 0.32),
-      elevation: 0,
+    return GlassChip(
+      color: color,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -56,8 +52,7 @@ class ConnectionBadge extends StatelessWidget {
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: color,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 1.1,
+              fontWeight: FontWeight.w600,
             ),
           ),
         ],
@@ -86,51 +81,65 @@ class SafetyBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GlassSurface(
-      padding: const EdgeInsets.all(16),
+    return GlassPanel(
+      padding: const EdgeInsets.all(15),
       tint: color.withValues(alpha: 0.12),
-      borderColor: color.withValues(alpha: 0.42),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(icon, color: color),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: color,
-                    fontWeight: FontWeight.w800,
-                  ),
+      borderColor: color.withValues(alpha: 0.36),
+      borderRadius: BorderRadius.circular(22),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final content = Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(13),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  message,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.68),
-                  ),
+                child: Icon(icon, color: color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      message,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.onSurface.withValues(alpha: 0.62),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
-          if (action != null)
-            TextButton(
-              onPressed: action,
-              child: Text(actionLabel ?? 'REINTENTAR'),
-            ),
-        ],
+              ),
+            ],
+          );
+          if (action == null) return content;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              content,
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: action,
+                  child: Text(actionLabel ?? 'Reconectar'),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
