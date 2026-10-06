@@ -11,6 +11,8 @@ import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/status_widgets.dart';
 import '../widgets/cartesian_visualizer.dart';
+import '../../vision/controller/vision_controller.dart';
+import '../../vision/presentation/vision_widgets.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -20,6 +22,7 @@ class DashboardScreen extends StatelessWidget {
     final machine = context.watch<MachineController>();
     final state = machine.state;
     final preferences = context.watch<SettingsController>().settings;
+    final vision = context.watch<VisionController>().state;
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
@@ -68,6 +71,22 @@ class DashboardScreen extends StatelessWidget {
                 MotionReveal(
                   delay: const Duration(milliseconds: 125),
                   child: _StatusMatrix(state: state),
+                ),
+                const SizedBox(height: 16),
+                VisionReadouts(
+                  title: 'Visor inteligente',
+                  rows: {
+                    'Visor': visionConnectionLabel(vision),
+                    'Calibración': visionStatusLabel(vision.calibrationStatus),
+                    if (vision.lastReport != null)
+                      'Última detección': vision.lastReport!.detected == false
+                          ? 'Sin detección'
+                          : vision.lastReport!.object ?? 'No informada',
+                    if (vision.position != null)
+                      'Posición':
+                          'X ${vision.position!.x?.toStringAsFixed(2) ?? '—'} · Z ${vision.position!.z?.toStringAsFixed(2) ?? '—'}',
+                    if (vision.reportStale) 'Reporte': 'Caducado',
+                  },
                 ),
                 const SizedBox(height: 24),
                 const SectionLabel('Actividad reciente'),

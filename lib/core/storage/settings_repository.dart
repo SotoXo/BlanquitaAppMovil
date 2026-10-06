@@ -34,8 +34,22 @@ class SettingsRepository {
           _preferences.getBool(_Keys.connectionLossAlerts) ?? true,
       visualSensitivity:
           _preferences.getDouble(_Keys.visualSensitivity) ?? 0.65,
-      cameraName: _preferences.getString(_Keys.cameraName) ?? 'No configurada',
-      visionTargetFps: _preferences.getInt(_Keys.visionTargetFps) ?? 30,
+      visionWebsocketUrl:
+          _preferences.getString(_Keys.visionWebsocketUrl) ?? '',
+      visionAutoReconnect:
+          _preferences.getBool(_Keys.visionAutoReconnect) ?? true,
+      visionHeartbeatTimeout: Duration(
+        milliseconds:
+            (_preferences.getInt(_Keys.visionHeartbeatTimeout) ?? 5000).clamp(
+              1000,
+              60000,
+            ),
+      ),
+      visionMinimumConfidence:
+          (_preferences.getDouble(_Keys.visionMinimumConfidence) ?? 0.8).clamp(
+            0.0,
+            1.0,
+          ),
     );
   }
 
@@ -66,8 +80,22 @@ class SettingsRepository {
         _Keys.visualSensitivity,
         settings.visualSensitivity,
       ),
-      _preferences.setString(_Keys.cameraName, settings.cameraName),
-      _preferences.setInt(_Keys.visionTargetFps, settings.visionTargetFps),
+      _preferences.setString(
+        _Keys.visionWebsocketUrl,
+        settings.visionWebsocketUrl,
+      ),
+      _preferences.setBool(
+        _Keys.visionAutoReconnect,
+        settings.visionAutoReconnect,
+      ),
+      _preferences.setInt(
+        _Keys.visionHeartbeatTimeout,
+        settings.visionHeartbeatTimeout.inMilliseconds,
+      ),
+      _preferences.setDouble(
+        _Keys.visionMinimumConfidence,
+        settings.visionMinimumConfidence,
+      ),
     ]);
   }
 
@@ -94,6 +122,8 @@ abstract final class _Keys {
   static const strongLimitFeedback = 'safety.strong_limit_feedback';
   static const connectionLossAlerts = 'safety.connection_loss_alerts';
   static const visualSensitivity = 'control.visual_sensitivity';
-  static const cameraName = 'vision.camera_name';
-  static const visionTargetFps = 'vision.target_fps';
+  static const visionWebsocketUrl = 'vision.websocket_url';
+  static const visionAutoReconnect = 'vision.auto_reconnect';
+  static const visionHeartbeatTimeout = 'vision.heartbeat_timeout_ms';
+  static const visionMinimumConfidence = 'vision.minimum_confidence';
 }

@@ -10,6 +10,9 @@ import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../controller/app_settings.dart';
 import '../controller/settings_controller.dart';
+import '../../vision/controller/vision_controller.dart';
+import '../../vision/services/remote_vision_service.dart';
+import '../../vision/presentation/vision_widgets.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,6 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final controller = context.watch<SettingsController>();
     final settings = controller.settings;
     final machine = context.watch<MachineController>();
+    final vision = context.watch<VisionController>();
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
@@ -152,8 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     _ToggleRow(
                       title: 'Modo rendimiento',
-                      subtitle:
-                          'Quita blur y reserva GPU para la futura cámara.',
+                      subtitle: 'Reduce el coste gráfico de las superficies.',
                       value: settings.performanceMode,
                       onChanged: controller.setPerformanceMode,
                       accent: AppColors.mint,
@@ -195,27 +198,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 10),
                 _SettingsDisclosure(
                   icon: CupertinoIcons.viewfinder,
-                  title: 'Visión',
-                  summary:
-                      '${settings.cameraName} · ${settings.visionTargetFps} FPS',
+                  title: 'Conexión visión',
+                  summary: 'Laptop: ${visionConnectionLabel(vision.state)}',
                   expanded: _expanded == 3,
                   onTap: () => _toggle(3),
                   children: [
                     _ActionRow(
-                      title: 'Cámara',
-                      subtitle: settings.cameraName,
-                      onTap: () => _visionNotConfigured(context),
+                      title: 'URL Vision Server',
+                      subtitle: settings.visionWebsocketUrl.isEmpty
+                          ? 'Sin dirección guardada'
+                          : settings.visionWebsocketUrl,
+                      onTap: () => _editVisionUrl(context, controller),
                     ),
-                    _ChoiceRow<int>(
-                      title: 'FPS objetivo',
-                      value: settings.visionTargetFps,
-                      options: const {15: '15 FPS', 24: '24 FPS', 30: '30 FPS'},
-                      onChanged: controller.setVisionTargetFps,
+                    _ActionRow(
+                      title: 'Vision Server',
+                      subtitle: vision.state.ready ? 'Ready' : 'No disponible',
                     ),
-                    const _ActionRow(
-                      title: 'Calibración',
-                      subtitle: 'Pendiente',
+                    _ToggleRow(
+                      title: 'Reconexión de visión',
+                      subtitle:
+                          'Recuperar el enlace con la laptop automáticamente.',
+                      value: settings.visionAutoReconnect,
+                      onChanged: controller.setVisionAutoReconnect,
                     ),
+                    _ChoiceRow<Duration>(
+                      title: 'Timeout heartbeat',
+                      value: settings.visionHeartbeatTimeout,
+                      options: {
+                        settings.visionHeartbeatTimeout:
+                            '${settings.visionHeartbeatTimeout.inMilliseconds / 1000} s',
+                        const Duration(seconds: 2): '2 s',
+                        const Duration(seconds: 5): '5 s',
+                        const Duration(seconds: 10): '10 s',
+                        const Duration(seconds: 30): '30 s',
+                      },
+                      onChanged: controller.setVisionHeartbeatTimeout,
+                    ),
+                    _SliderRow(
+                      title:
+                          'Confianza mínima · ${(settings.visionMinimumConfidence * 100).round()} %',
+                      subtitle:
+                          'Umbral informativo para los reportes recibidos.',
+                      value: settings.visionMinimumConfidence,
+                      onChanged: controller.setVisionMinimumConfidence,
+                    ),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        GlassButton(
+                          onPressed:
+                              vision.isConnecting || vision.state.isConnected
+                              ? null
+                              : vision.connect,
+                          child: const Text('Conectar'),
+                        ),
+                        GlassButton(
+                          onPressed: vision.isConnecting
+                              ? null
+                              : vision.reconnect,
+                          child: const Text('Reconectar visión'),
+                        ),
+                        GlassButton(
+                          onPressed:
+                              vision.state.isConnected || vision.isConnecting
+                              ? vision.disconnect
+                              : null,
+                          child: const Text('Desconectar visión'),
+                        ),
+                      ],
+                    ),
+                    if (vision.state.error != null)
+                      Text(
+                        vision.state.error!,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppColors.warning,
+                        ),
+                      ),
                   ],
                 ),
                 const SizedBox(height: 18),
@@ -302,22 +361,57 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await machine.reconnect();
   }
 
-  void _visionNotConfigured(BuildContext context) {
-    showDialog<void>(
+  Future<void> _editVisionUrl(
+    BuildContext context,
+    SettingsController settings,
+  ) async {
+    final text = TextEditingController(
+      text: settings.settings.visionWebsocketUrl,
+    );
+    final form = GlobalKey<FormState>();
+    final value = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Visión no configurada'),
-        content: const Text(
-          'La selección de cámara se habilitará al integrar una fuente real de video. No se simulan detecciones.',
+        title: const Text('URL Vision Server'),
+        content: Form(
+          key: form,
+          child: TextFormField(
+            controller: text,
+            keyboardType: TextInputType.url,
+            autocorrect: false,
+            decoration: const InputDecoration(
+              labelText: 'URL laptop',
+              hintText: 'ws://192.168.x.x:8765/',
+              helperText: 'Deja vacío para quitar el endpoint.',
+            ),
+            validator: (value) =>
+                value == null ||
+                    value.trim().isEmpty ||
+                    RemoteVisionService.isValidUrl(value)
+                ? null
+                : 'Introduce una URL ws:// o wss:// válida.',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Entendido'),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (form.currentState!.validate()) {
+                Navigator.pop(context, text.text.trim());
+              }
+            },
+            child: const Text('Guardar'),
           ),
         ],
       ),
     );
+    // The dialog route still animates after its result completes.
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    text.dispose();
+    if (value != null) await settings.setVisionWebsocketUrl(value);
   }
 }
 

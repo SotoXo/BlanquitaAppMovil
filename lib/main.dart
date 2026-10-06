@@ -5,6 +5,7 @@ import 'app/app.dart';
 import 'core/storage/settings_repository.dart';
 import 'core/websocket/machine_controller.dart';
 import 'features/settings/controller/settings_controller.dart';
+import 'features/vision/controller/vision_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,6 +22,7 @@ Future<void> main() async {
     BlanquitaApp(
       settingsController: settingsController,
       machineController: machineController,
+      visionController: VisionController(settingsController),
     ),
   );
 }

@@ -17,8 +17,10 @@ class AppSettings {
     this.strongLimitFeedback = true,
     this.connectionLossAlerts = true,
     this.visualSensitivity = 0.65,
-    this.cameraName = 'No configurada',
-    this.visionTargetFps = 30,
+    this.visionWebsocketUrl = '',
+    this.visionAutoReconnect = true,
+    this.visionHeartbeatTimeout = const Duration(seconds: 5),
+    this.visionMinimumConfidence = 0.8,
   });
 
   final String websocketUrl;
@@ -34,8 +36,10 @@ class AppSettings {
   final bool strongLimitFeedback;
   final bool connectionLossAlerts;
   final double visualSensitivity;
-  final String cameraName;
-  final int visionTargetFps;
+  final String visionWebsocketUrl;
+  final bool visionAutoReconnect;
+  final Duration visionHeartbeatTimeout;
+  final double visionMinimumConfidence;
 
   AppSettings copyWith({
     String? websocketUrl,
@@ -51,8 +55,10 @@ class AppSettings {
     bool? strongLimitFeedback,
     bool? connectionLossAlerts,
     double? visualSensitivity,
-    String? cameraName,
-    int? visionTargetFps,
+    String? visionWebsocketUrl,
+    bool? visionAutoReconnect,
+    Duration? visionHeartbeatTimeout,
+    double? visionMinimumConfidence,
   }) {
     return AppSettings(
       websocketUrl: websocketUrl ?? this.websocketUrl,
@@ -68,8 +74,12 @@ class AppSettings {
       strongLimitFeedback: strongLimitFeedback ?? this.strongLimitFeedback,
       connectionLossAlerts: connectionLossAlerts ?? this.connectionLossAlerts,
       visualSensitivity: visualSensitivity ?? this.visualSensitivity,
-      cameraName: cameraName ?? this.cameraName,
-      visionTargetFps: visionTargetFps ?? this.visionTargetFps,
+      visionWebsocketUrl: visionWebsocketUrl ?? this.visionWebsocketUrl,
+      visionAutoReconnect: visionAutoReconnect ?? this.visionAutoReconnect,
+      visionHeartbeatTimeout:
+          visionHeartbeatTimeout ?? this.visionHeartbeatTimeout,
+      visionMinimumConfidence:
+          visionMinimumConfidence ?? this.visionMinimumConfidence,
     );
   }
 }

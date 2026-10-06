@@ -2,9 +2,12 @@ import 'package:blanquita/app/app.dart';
 import 'package:blanquita/core/storage/settings_repository.dart';
 import 'package:blanquita/core/websocket/machine_controller.dart';
 import 'package:blanquita/features/settings/controller/settings_controller.dart';
+import 'package:blanquita/features/vision/controller/vision_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'features/vision/support/vision_test_channel.dart';
+import 'package:blanquita/features/vision/services/remote_vision_service.dart';
 
 void main() {
   testWidgets('shows the four persistent navigation destinations', (
@@ -20,6 +23,7 @@ void main() {
       BlanquitaApp(
         settingsController: settings,
         machineController: machine,
+        visionController: VisionController(settings),
         autoConnect: false,
       ),
     );
@@ -37,7 +41,8 @@ void main() {
 
     await tester.tap(find.text('Visión'));
     await tester.pumpAndSettle();
-    expect(find.text('Cámara no configurada'), findsOneWidget);
+    expect(find.text('Sin datos de visión'), findsOneWidget);
+    expect(find.text('Laptop · Desconectada'), findsOneWidget);
 
     await tester.tap(find.text('Ajustes'));
     await tester.pumpAndSettle();
@@ -55,4 +60,90 @@ void main() {
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
   });
+
+  testWidgets(
+    'remote monitor and vision settings work on a narrow mobile screen',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      SharedPreferences.setMockInitialValues({
+        'vision.websocket_url': 'ws://laptop.test:8765/',
+        'appearance.performance_mode': true,
+        'appearance.reduce_motion': true,
+      });
+      final settings = SettingsController(
+        SettingsRepository(await SharedPreferences.getInstance()),
+      );
+      await settings.load();
+      final machine = MachineController(settings);
+      final channel = TestVisionChannel();
+      final now = DateTime.utc(2026, 10, 6, 10, 30);
+      final vision = VisionController(
+        settings,
+        now: () => now,
+        tickInterval: const Duration(days: 1),
+        service: RemoteVisionService(channelFactory: (_) => channel),
+      );
+      // Real transport futures and timer cleanup run outside the widget fake clock.
+      await tester.runAsync(() => vision.connect());
+      channel.receive('vision.ready', now);
+      channel.receive('vision.status', now, {
+        'cameraName': 'USB laptop',
+        'cameraStatus': 'operative',
+        'calibrationStatus': 'valid',
+        'detectorStatus': 'active',
+        'fps': 24,
+      });
+      channel.receive('vision.report', now, {
+        'detected': true,
+        'object': 'pieza',
+        'position': {'x': 145.2, 'z': 78.4},
+        'confidence': .96,
+      });
+      await tester.pumpWidget(
+        BlanquitaApp(
+          settingsController: settings,
+          machineController: machine,
+          visionController: vision,
+          autoConnect: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(machine.state.isConnected, false);
+      expect(vision.state.isConnected, true);
+      await tester.tap(find.text('Visión'));
+      await tester.pumpAndSettle();
+      expect(find.text('Laptop · Conectada'), findsOneWidget);
+      expect(find.text('USB laptop'), findsOneWidget);
+      expect(find.text('Sin datos de visión'), findsNothing);
+      await tester.ensureVisible(find.text('Confianza'));
+      await tester.pumpAndSettle();
+      expect(find.text('145.20'), findsOneWidget);
+      expect(find.text('78.40'), findsOneWidget);
+      expect(find.text('96.0 %'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('Ajustes'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Conexión visión'));
+      await tester.tap(find.text('Conexión visión'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('URL Vision Server'));
+      await tester.tap(find.text('URL Vision Server'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextFormField), 'http://invalid');
+      await tester.tap(find.text('Guardar'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Introduce una URL ws:// o wss:// válida.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      expect(settings.settings.visionWebsocketUrl, 'ws://laptop.test:8765/');
+      expect(tester.takeException(), isNull);
+      await tester.runAsync(() => vision.disconnect());
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(() => channel.incoming.close());
+    },
+  );
 }

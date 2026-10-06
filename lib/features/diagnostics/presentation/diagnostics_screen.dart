@@ -10,6 +10,8 @@ import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/status_widgets.dart';
+import '../../vision/controller/vision_controller.dart';
+import '../../vision/presentation/vision_widgets.dart';
 
 class DiagnosticsScreen extends StatelessWidget {
   const DiagnosticsScreen({super.key});
@@ -18,6 +20,8 @@ class DiagnosticsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final machine = context.watch<MachineController>();
     final state = machine.state;
+    final vision = context.watch<VisionController>();
+    final vs = vision.state;
 
     return AppBackground(
       child: Scaffold(
@@ -44,6 +48,8 @@ class DiagnosticsScreen extends StatelessWidget {
                       trailing: ConnectionBadge(phase: state.connection),
                     ),
                     const SizedBox(height: 20),
+                    const SectionLabel('ESP32 · Control'),
+                    const SizedBox(height: 10),
                     MotionReveal(
                       child: _TransportConsole(machine: machine, state: state),
                     ),
@@ -113,6 +119,60 @@ class DiagnosticsScreen extends StatelessWidget {
                       delay: const Duration(milliseconds: 150),
                       child: _EventConsole(machine: machine),
                     ),
+                    const SizedBox(height: 24),
+                    const SectionLabel('Laptop · Visión'),
+                    const SizedBox(height: 10),
+                    VisionReadouts(
+                      title: 'Vision Server',
+                      rows: {
+                        'Endpoint': vision.endpoint.isEmpty
+                            ? 'Sin configurar'
+                            : vision.endpoint,
+                        'Conexión': visionConnectionLabel(vs),
+                        'Ready': vs.ready ? 'Sí' : 'No',
+                        'Último mensaje': vs.lastMessage ?? '—',
+                        'Recepción': visionTime(vs.lastMessageAt),
+                        'Último heartbeat': visionTime(vs.lastHeartbeat),
+                        'Último reporte': visionTime(vs.lastReport?.timestamp),
+                        'ID reporte': vs.lastReport?.id ?? '—',
+                        'Edad reporte': visionAge(vs.reportAge),
+                        'Stale': vs.stale ? 'Sí' : 'No',
+                        'Reporte caducado': vs.reportStale ? 'Sí' : 'No',
+                        'Latencia': vs.latency == null
+                            ? '—'
+                            : '${vs.latency!.toStringAsFixed(1)} ms',
+                        'Error': vs.error ?? '—',
+                        'Cámara': visionStatusLabel(vs.cameraStatus),
+                        'Nombre cámara': vs.cameraName ?? '—',
+                        'Detector': visionStatusLabel(vs.detectorStatus),
+                        'Calibración': visionStatusLabel(vs.calibrationStatus),
+                        'Intentos reconexión': vision.reconnectAttempts
+                            .toString(),
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    GlassPanel(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            'Eventos de visión',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 12),
+                          if (vision.diagnostics.isEmpty)
+                            const Text('Sin eventos de visión'),
+                          for (final entry in vision.diagnostics.take(20))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Text(
+                                entry,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -155,7 +215,7 @@ class _TransportConsole extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Canal WebSocket',
+                      'Canal WebSocket ESP32',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 2),

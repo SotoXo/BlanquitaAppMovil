@@ -20,7 +20,12 @@ Aplicación Flutter de supervisión y control seguro para el cartesiano BLANQUIT
 - `lib/shared`: superficies glass y componentes visuales reutilizables.
 - `lib/app`: tema y navegación global.
 
-La pantalla de Visión y sus interfaces están preparadas para una integración futura. No existe captura, calibración ni detección simulada en esta fase.
+Visión es un cliente remoto del Vision Server de la laptop. Mantiene su propio
+WebSocket, controlador global y estado, independientes del ESP32. En Ajustes →
+Conexión visión se configura la URL, reconexión, timeout y confianza mínima.
+No existe captura ni procesamiento local, video, detección simulada o movimiento
+basado en visión. El contrato JSON y la validación están en
+[docs/vision-client.md](docs/vision-client.md).
 
 ## Conexión y firmware
 

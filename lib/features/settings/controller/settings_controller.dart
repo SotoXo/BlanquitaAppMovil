@@ -48,8 +48,18 @@ class SettingsController extends ChangeNotifier {
       _update(_settings.copyWith(connectionLossAlerts: value));
   Future<void> setVisualSensitivity(double value) =>
       _update(_settings.copyWith(visualSensitivity: value));
-  Future<void> setCameraName(String value) =>
-      _update(_settings.copyWith(cameraName: value));
-  Future<void> setVisionTargetFps(int value) =>
-      _update(_settings.copyWith(visionTargetFps: value));
+  Future<void> setVisionWebsocketUrl(String value) =>
+      _update(_settings.copyWith(visionWebsocketUrl: value.trim()));
+  Future<void> setVisionAutoReconnect(bool value) =>
+      _update(_settings.copyWith(visionAutoReconnect: value));
+  Future<void> setVisionHeartbeatTimeout(Duration value) => _update(
+    _settings.copyWith(
+      visionHeartbeatTimeout: Duration(
+        milliseconds: value.inMilliseconds.clamp(1000, 60000),
+      ),
+    ),
+  );
+  Future<void> setVisionMinimumConfidence(double value) => _update(
+    _settings.copyWith(visionMinimumConfidence: value.clamp(0.0, 1.0)),
+  );
 }
