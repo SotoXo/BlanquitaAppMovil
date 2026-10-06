@@ -22,10 +22,18 @@ Aplicación Flutter de supervisión y control seguro para el cartesiano BLANQUIT
 
 Visión es un cliente remoto del Vision Server de la laptop. Mantiene su propio
 WebSocket, controlador global y estado, independientes del ESP32. En Ajustes →
-Conexión visión se configura la URL, reconexión, timeout y confianza mínima.
+Conexión visión se configura la URL manual, reconexión, timeout y confianza mínima.
+Visión prueba la URL guardada y, si falla, busca por UDP 4211. Solo un WebSocket
+con `vision.ready` válido confirma y persiste el servidor. Ajustes permite Buscar
+visor y Buscar dispositivos; las búsquedas ESP32/Visión son independientes.
 No existe captura ni procesamiento local, video, detección simulada o movimiento
 basado en visión. El contrato JSON y la validación están en
 [docs/vision-client.md](docs/vision-client.md).
+El contrato que debe implementar la PC Python externa está en
+[docs/vision-discovery.md](docs/vision-discovery.md).
+La corrección del crash al guardar URLs, el arranque sin endpoints y la
+recuperación tras volver de WiFi se documentan en
+[docs/connection-hotfix.md](docs/connection-hotfix.md).
 
 ## Conexión y firmware
 

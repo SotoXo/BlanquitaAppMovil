@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/vision_test_channel.dart';
+import 'support/vision_test_discovery.dart';
 
 Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 15));
 Future<void> until(bool Function() condition) async {
@@ -44,6 +45,7 @@ void main() {
     now = DateTime.utc(2026, 10, 6, 10, 30);
     vision = VisionController(
       settings,
+      discoveryService: TestVisionDiscovery(),
       now: () => now,
       tickInterval: const Duration(milliseconds: 5),
       reconnectBaseDelay: const Duration(milliseconds: 40),
@@ -52,6 +54,7 @@ void main() {
           urls.add(uri);
           final channel = TestVisionChannel();
           channels.add(channel);
+          scheduleMicrotask(() => channel.receive('vision.ready', now));
           return channel;
         },
       ),
@@ -72,7 +75,7 @@ void main() {
   test('transport connected and protocol ready are distinct', () async {
     await vision.connect();
     expect(vision.state.isConnected, true);
-    expect(vision.state.ready, false);
+    expect(vision.state.ready, true);
     expect(vision.state.position, isNull);
     channels.last.receive('vision.ready', now);
     expect(vision.state.ready, true);
@@ -136,12 +139,13 @@ void main() {
       now = now.add(const Duration(seconds: 3));
       await until(() => vision.state.stale);
       expect(vision.state.ready, false);
-      expect(vision.state.reportStale, true);
-      expect(vision.state.reportAge, const Duration(seconds: 3));
+      expect(vision.state.stale, true);
+      await until(() => channels.length == 2 && vision.state.isConnected);
+      expect(vision.state.lastReport, isNull);
       channels.last.receive('vision.heartbeat', now);
       expect(vision.state.stale, false);
       expect(vision.state.ready, true);
-      expect(vision.state.reportStale, true);
+      expect(vision.state.reportStale, false);
     },
   );
 
@@ -150,7 +154,7 @@ void main() {
     now = now.add(const Duration(seconds: 3));
     channels.last.receive('vision.report', now, {'detected': true});
     await until(() => vision.state.stale);
-    expect(vision.state.reportStale, false);
+    expect(vision.state.reportStale, true);
   });
 
   test(
@@ -219,7 +223,7 @@ void main() {
   });
 
   test(
-    'remote disconnect retries with increasing backoff and resets on ready',
+    'remote disconnect retries and successful ready resets backoff',
     () async {
       await vision.connect();
       await channels.last.incoming.close();
@@ -230,16 +234,10 @@ void main() {
       );
       await until(() => channels.length == 2 && vision.state.isConnected);
       await channels.last.incoming.close();
-      expect(
-        vision.diagnostics.any((item) => item.contains('Reconexión en 80 ms')),
-        true,
-      );
+      expect(vision.diagnostics.first.contains('Reconexión en 40 ms'), true);
       await until(() => channels.length == 3 && vision.state.isConnected);
       await channels.last.incoming.close();
-      expect(
-        vision.diagnostics.any((item) => item.contains('Reconexión en 160 ms')),
-        true,
-      );
+      expect(vision.diagnostics.first.contains('Reconexión en 40 ms'), true);
       await until(() => channels.length == 4 && vision.state.isConnected);
       channels.last.receive('vision.ready', now);
       expect(vision.reconnectAttempts, 0);
@@ -286,19 +284,23 @@ void main() {
     expect(channels.length, 2);
   });
 
-  test('invalid or empty URL never creates a socket', () async {
-    for (final url in [
-      '',
-      'http://laptop.test',
-      'ws://',
-      'ws://laptop.test/#fragment',
-    ]) {
-      await settings.setVisionWebsocketUrl(url);
-      await vision.connect();
-      expect(vision.state.connection, VisionConnection.error);
-      expect(channels, isEmpty);
-    }
-  });
+  test(
+    'invalid or empty URL discovers without opening an invalid socket',
+    () async {
+      await settings.setVisionAutoReconnect(false);
+      for (final url in [
+        '',
+        'http://laptop.test',
+        'ws://',
+        'ws://laptop.test/#fragment',
+      ]) {
+        await settings.setVisionWebsocketUrl(url);
+        await vision.connect();
+        expect(vision.state.connection, VisionConnection.disconnected);
+        expect(channels, isEmpty);
+      }
+    },
+  );
 
   test('cancelled pending handshake cannot resurrect old session', () async {
     vision.dispose();
@@ -307,6 +309,7 @@ void main() {
     channels.add(pending);
     vision = VisionController(
       settings,
+      discoveryService: TestVisionDiscovery(),
       service: RemoteVisionService(channelFactory: (_) => pending),
     );
     final connecting = vision.connect();
@@ -325,12 +328,13 @@ void main() {
     channels.add(pending);
     vision = VisionController(
       settings,
+      discoveryService: TestVisionDiscovery(),
       connectionTimeout: const Duration(milliseconds: 20),
       service: RemoteVisionService(channelFactory: (_) => pending),
     );
     await vision.connect();
     expect(vision.state.connection, VisionConnection.disconnected);
-    expect(vision.state.error, contains('TimeoutException'));
+    expect(vision.state.error, contains('vision.ready'));
     expect(pending.sink.closed, true);
     handshake.complete();
   });

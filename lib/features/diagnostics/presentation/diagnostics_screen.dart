@@ -125,9 +125,13 @@ class DiagnosticsScreen extends StatelessWidget {
                     VisionReadouts(
                       title: 'Vision Server',
                       rows: {
-                        'Endpoint': vision.endpoint.isEmpty
-                            ? 'Sin configurar'
-                            : vision.endpoint,
+                        'Endpoint':
+                            vision.connectionWebsocketUrl ??
+                            (vision.endpoint.isEmpty
+                                ? 'Sin configurar'
+                                : vision.endpoint),
+                        'Dirección detectada': vision.detectedAddress ?? '—',
+                        'Discovery': vision.discoveryStatusLabel,
                         'Conexión': visionConnectionLabel(vs),
                         'Ready': vs.ready ? 'Sí' : 'No',
                         'Último mensaje': vs.lastMessage ?? '—',

@@ -7,11 +7,13 @@ Decisiones consultadas antes de implementar:
 
 La laptop percibe, el móvil supervisa y el ESP32 ejecuta y protege. En esta fase
 visión informa exclusivamente. No hay AutomationCoordinator, SafetyGate, control
-de motores desde visión, procesamiento de cámara, IA ni discovery de laptop.
+de motores desde visión, procesamiento de cámara ni IA. El discovery de laptop
+ahora está implementado; su contrato externo está en [vision-discovery.md](vision-discovery.md).
 
 ## Arquitectura
 
 ```text
+VisionDiscoveryService (UDP 4211) → candidato → WebSocket + vision.ready
 Laptop WebSocket → RemoteVisionService / VisionSession
                 → VisionProtocolParser / modelos
                 → VisionController (ChangeNotifier)
@@ -26,16 +28,21 @@ controlador por separado y conserva el comportamiento de seguridad del ESP32.
 
 ## Conexión
 
-1. Configurar URL en Ajustes → Conexión visión, por ejemplo
+1. La URL manual en Ajustes → Conexión visión sigue disponible, por ejemplo
    `ws://<IP-laptop>:8765/` o `wss://<host>/vision`. No hay IP predeterminada.
-2. Pulsar Conectar. Se abre un socket exclusivo de visión con timeout de 8 s.
-3. WebSocket conectado y Vision Server ready son estados distintos.
-   `vision.ready` con payload vacío comunica ready; `ready: false` lo revoca.
+2. Pulsar Conectar: primero URL guardada, luego discovery UDP si falla. Al iniciar
+   se ejecuta este flujo aunque no haya URL persistida. Cada candidato tiene
+   timeout de 8 s para abrir el socket y recibir `vision.ready` válido.
+3. Abrir TCP/WebSocket no valida la conexión. Solo `vision.ready` del protocolo
+   correcto y versión 1 la valida; payload vacío comunica ready y `ready: false`
+   no valida. Tras conectar, `ready: false` puede revocar disponibilidad.
 4. Recibir JSON, validar envelope y campos conocidos, actualizar telemetría.
 5. Iniciar visor / Detener visor / Ping solo envían `vision.start`,
    `vision.stop`, `vision.ping`; no cambian la telemetría de forma optimista.
 6. Desconectar cancela los reintentos. Cambiar URL reemplaza la sesión activa y
-   limpia la telemetría anterior. Volver a abrir la app conecta si hay una URL.
+   limpia la telemetría anterior. Solo candidatos con `vision.ready` se persisten.
+   Buscar visor inicia por UDP; Buscar dispositivos inicia ambos controladores
+   independientemente. Ningún candidato fallido reemplaza la URL manual.
 
 Una conexión puede estar activa mientras la otra está desconectada. Un reporte,
 error, heartbeat vencido o desconexión de visión jamás llama a MachineController.
@@ -127,7 +134,8 @@ crudos ni payload de motores mediante el API de transporte.
 - `lastHeartbeat` registra recepción local de un `vision.heartbeat` válido.
 - Hasta el primer heartbeat, el timeout empieza al conectar el socket.
 - El estado se revisa cada segundo. Tras superar el timeout, `stale = true` y
-  ready efectivo es false. El socket permanece abierto para recuperar heartbeat.
+  ready efectivo es false. Se cierra la sesión y se activa recuperación con
+  backoff, URL conocida y luego discovery si la URL falla.
 - Reportes/status no sustituyen al heartbeat. Un heartbeat fresco elimina stale,
   pero no hace reciente un reporte antiguo.
 - `reportAge` usa el timestamp del reporte; `reportStale` utiliza el mismo timeout
@@ -143,8 +151,9 @@ crudos ni payload de motores mediante el API de transporte.
 ## Reconexión y lifecycle
 
 Con reconexión habilitada, errores de transporte y cierre remoto reintentan en
-1, 2, 4, 8, 16 y hasta 30 s. El contador se reinicia al recibir ready o heartbeat,
-no simplemente al abrir TCP. Los cambios de ajuste y desconexión manual cancelan
+1, 2, 4, 8, 16 y hasta 30 s. Cada ciclo prueba primero la URL conocida y después
+discovery UDP. El contador se reinicia al validar `vision.ready`, no simplemente
+al abrir TCP. Los cambios de ajuste y desconexión manual cancelan
 reintentos pendientes. Intentos obsoletos no pueden reactivar una sesión cancelada.
 
 Al salir del primer plano se cierra visión y se marca stale. Al volver se intenta
@@ -186,7 +195,7 @@ lifecycle, cancelación de handshake, ajustes, ambos controladores independiente
 WebSocket real en loopback y navegación. Las pruebas del ESP32 se conservan.
 La prueba loopback no sustituye la comprobación final con la laptop y el robot.
 
-Resultados del 6 de octubre de 2026:
+Resultados de la fase inicial, anteriores a discovery (6 de octubre de 2026):
 
 - `flutter analyze`: **No issues found**.
 - `flutter test`: **57 pruebas correctas**, incluidas todas las pruebas existentes
@@ -196,7 +205,7 @@ Resultados del 6 de octubre de 2026:
 - Dependencias añadidas: **ninguna**. No se modificó pubspec ni su lockfile.
 - Rama: `feat/vision-client`. No se hizo commit ni push.
 
-## Inventario de archivos
+## Inventario de archivos de la fase inicial
 
 11 archivos modificados, relativos a la raíz del proyecto:
 

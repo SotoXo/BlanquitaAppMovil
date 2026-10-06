@@ -48,6 +48,7 @@ class MachineController extends ChangeNotifier {
   int _connectionGeneration = 0;
   int _reconnectAttempt = 0;
   bool _manualDisconnect = false;
+  bool _inactive = false;
   bool _manualControlsLocked = false;
   bool _disposed = false;
 
@@ -93,12 +94,23 @@ class MachineController extends ChangeNotifier {
       _state.finalLimitActive != true;
 
   Future<void> connect() async {
-    if (_disposed || isConnecting || _state.isConnected) return;
+    if (_disposed || _inactive || isConnecting || _state.isConnected) return;
     await _connectFlow();
   }
 
+  Future<void> saveEndpointAndReconnect(String value) async {
+    if (_disposed) return;
+    final closing = disconnect(reason: 'Actualizando dirección del ESP32…');
+    final generation = _connectionGeneration;
+    await closing;
+    if (!_isCurrent(generation)) return;
+    await _settings.setWebsocketUrl(value);
+    // A manual disconnect or lifecycle change while saving takes precedence.
+    if (_isCurrent(generation)) await connect();
+  }
+
   Future<void> searchEsp32() async {
-    if (_disposed || isConnecting) return;
+    if (_disposed || _inactive || isConnecting) return;
     final closing = disconnect(reason: 'Preparando búsqueda del ESP32…');
     final generation = _connectionGeneration;
     await closing;
@@ -439,6 +451,8 @@ class MachineController extends ChangeNotifier {
   }
 
   void handleAppInactive() {
+    if (_disposed || _inactive) return;
+    _inactive = true;
     if (_state.activeMovement != null) {
       stopMovement();
       _addEvent(
@@ -448,9 +462,22 @@ class MachineController extends ChangeNotifier {
     } else {
       _stopHeartbeat();
     }
+    // WiFi settings can leave a TCP socket apparently alive on an old network.
+    // Suspend it after STOP, retaining the user's reconnect/disconnect intent.
+    ++_connectionGeneration;
+    _reconnectTimer?.cancel();
+    _discovery.cancel();
+    _isDiscovering = false;
+    _closeSocket();
+    _setDisconnected(
+      'Conexión pausada mientras la app está inactiva',
+      isError: false,
+    );
   }
 
   void handleAppResumed() {
+    if (_disposed) return;
+    _inactive = false;
     if ((_state.connection == ConnectionPhase.disconnected ||
             _state.connection == ConnectionPhase.error) &&
         _settings.settings.autoReconnect &&

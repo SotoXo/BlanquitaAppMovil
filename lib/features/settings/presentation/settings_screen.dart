@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -60,6 +62,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     autoReconnect: settings.autoReconnect,
                     onEdit: () => _editWebsocket(context, controller, machine),
                   ),
+                ),
+                const SizedBox(height: 18),
+                _VisionConnectionPanel(
+                  vision: vision,
+                  onEdit: () => _editVisionUrl(context, controller),
+                ),
+                const SizedBox(height: 10),
+                GlassButton(
+                  expanded: true,
+                  onPressed: machine.isConnecting && vision.isConnecting
+                      ? null
+                      : () {
+                          if (!machine.isConnecting) {
+                            unawaited(machine.searchEsp32());
+                          }
+                          if (!vision.isConnecting) {
+                            unawaited(vision.searchVision());
+                          }
+                        },
+                  child: const Text('Buscar dispositivos'),
                 ),
                 const SizedBox(height: 18),
                 Text(
@@ -322,9 +344,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     MachineController machine,
   ) async {
     final text = TextEditingController(text: settings.settings.websocketUrl);
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
+    final value = await _showUrlDialog(
+      context,
+      text,
+      (context) => AlertDialog(
         icon: const Icon(CupertinoIcons.link),
         title: const Text('Dirección WebSocket'),
         content: TextField(
@@ -355,23 +378,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-    text.dispose();
-    if (value == null || !context.mounted) return;
-    await settings.setWebsocketUrl(value);
-    await machine.reconnect();
+    if (value == null || !mounted) return;
+    await machine.saveEndpointAndReconnect(value);
   }
 
   Future<void> _editVisionUrl(
     BuildContext context,
     SettingsController settings,
   ) async {
+    final vision = context.read<VisionController>();
     final text = TextEditingController(
       text: settings.settings.visionWebsocketUrl,
     );
     final form = GlobalKey<FormState>();
-    final value = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
+    final value = await _showUrlDialog(
+      context,
+      text,
+      (context) => AlertDialog(
         title: const Text('URL Vision Server'),
         content: Form(
           key: form,
@@ -408,10 +431,98 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-    // The dialog route still animates after its result completes.
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    text.dispose();
-    if (value != null) await settings.setVisionWebsocketUrl(value);
+    if (value == null || !mounted) return;
+    await vision.saveEndpointAndReconnect(value);
+  }
+
+  Future<String?> _showUrlDialog(
+    BuildContext context,
+    TextEditingController text,
+    WidgetBuilder builder,
+  ) async {
+    TransitionRoute<String>? route;
+    try {
+      final value = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) {
+          route = ModalRoute.of(dialogContext) as TransitionRoute<String>;
+          return builder(dialogContext);
+        },
+      );
+      // showDialog completes at pop; completed waits for overlay removal too.
+      await route?.completed;
+      if (!mounted) return null;
+      return value;
+    } finally {
+      text.dispose();
+    }
+  }
+}
+
+class _VisionConnectionPanel extends StatelessWidget {
+  const _VisionConnectionPanel({required this.vision, required this.onEdit});
+  final VisionController vision;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = vision.state.ready ? AppColors.mint : AppColors.warning;
+    return GlassPanel(
+      emphasis: GlassEmphasis.prominent,
+      borderColor: color.withValues(alpha: 0.22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(CupertinoIcons.desktopcomputer, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Visor inteligente',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text(
+                      'Visor: ${visionConnectionLabel(vision.state)}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: color),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Editar URL Vision Server',
+                onPressed: onEdit,
+                icon: const Icon(CupertinoIcons.pencil),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Dirección detectada: ${vision.detectedAddress ?? 'Sin dirección'}',
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'Discovery: ${vision.discoveryStatusLabel}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'URL: ${vision.connectionWebsocketUrl ?? (vision.endpoint.isEmpty ? 'Sin dirección guardada' : vision.endpoint)}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          GlassButton(
+            onPressed: vision.isConnecting ? null : vision.searchVision,
+            child: const Text('Buscar visor'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

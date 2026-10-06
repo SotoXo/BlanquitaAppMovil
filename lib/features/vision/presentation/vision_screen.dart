@@ -85,9 +85,10 @@ class VisionScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          controller.endpoint.isEmpty
-                              ? 'Configura la URL del Vision Server en Ajustes.'
-                              : controller.endpoint,
+                          controller.connectionWebsocketUrl ??
+                              (controller.endpoint.isEmpty
+                                  ? 'Busca el visor o configura su URL en Ajustes.'
+                                  : controller.endpoint),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 14),
@@ -95,6 +96,12 @@ class VisionScreen extends StatelessWidget {
                           spacing: 8,
                           runSpacing: 8,
                           children: [
+                            GlassButton(
+                              onPressed: controller.isConnecting
+                                  ? null
+                                  : controller.searchVision,
+                              child: const Text('Buscar visor'),
+                            ),
                             GlassButton(
                               onPressed: controller.isConnecting
                                   ? null

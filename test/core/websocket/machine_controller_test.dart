@@ -309,14 +309,21 @@ void main() {
       expect(channel.sink.commands.last, 'x');
       await Future<void>.delayed(const Duration(milliseconds: 225));
       expect(channel.sink.commands, ['a', 'k', 'x']);
+      expect(machine.startMovement(MovementDirection.zUp), isFalse);
+      await settings.setAutoReconnect(true);
+      machine.handleAppResumed();
+      await _until(() => channels.length == 2);
+      final resumedChannel = channels.last;
+      resumedChannel.incoming.add('READY');
+      await _until(() => machine.state.isConnected);
       expect(machine.startMovement(MovementDirection.zUp), isTrue);
-      channel.incoming.add('SENSOR:FINAL:1');
+      resumedChannel.incoming.add('SENSOR:FINAL:1');
       await Future<void>.delayed(Duration.zero);
       expect(machine.state.activeMovement, isNull);
       expect(machine.startMovement(MovementDirection.xRight), isFalse);
       expect(machine.canStartSequence, isFalse);
       machine.emergencyStop();
-      expect(channel.sink.commands.last, 'z');
+      expect(resumedChannel.sink.commands.last, 'z');
     },
   );
 }
