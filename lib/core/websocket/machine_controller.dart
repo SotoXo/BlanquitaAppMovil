@@ -5,258 +5,267 @@ import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../../features/settings/controller/settings_controller.dart';
+import '../diagnostics/connection_log.dart';
+import '../network/connection_failure.dart';
 import '../haptics/haptics_service.dart';
 import '../models/machine_state.dart';
-import '../network/esp32_discovery_service.dart';
 import '../protocol/esp32_protocol.dart';
 
 class MachineController extends ChangeNotifier {
   MachineController(
     this._settings, {
-    Esp32DiscoveryService? discoveryService,
     WebSocketChannel Function(Uri)? channelFactory,
     Duration? readyTimeout,
+    Duration? transportTimeout,
+    this.reconnectBaseDelay = const Duration(seconds: 2),
+    ConnectionLog? connectionLog,
   }) : _haptics = HapticsService(_settings),
-       _discovery = discoveryService ?? Esp32DiscoveryService(),
        _channelFactory = channelFactory ?? WebSocketChannel.connect,
-       _readyTimeout = readyTimeout ?? handshakeTimeout;
-
+       _readyTimeout = readyTimeout ?? handshakeTimeout,
+       _transportTimeout = transportTimeout ?? handshakeTimeout,
+       _connectionLog = connectionLog ?? ConnectionLog.shared,
+       _previousUrl = _settings.settings.websocketUrl,
+       _previousAutoReconnect = _settings.settings.autoReconnect {
+    _settings.addListener(_settingsChanged);
+    _log('URL de control cargada', phase: 'endpoint_loaded');
+  }
   static const wifiName = 'CARTESIANO';
   static const heartbeatInterval = Duration(milliseconds: 200);
   static const handshakeTimeout = Duration(seconds: 5);
   static const maxEvents = 80;
-
   final SettingsController _settings;
   final HapticsService _haptics;
-  final Esp32DiscoveryService _discovery;
+  final ConnectionLog _connectionLog;
   final WebSocketChannel Function(Uri) _channelFactory;
   final Duration _readyTimeout;
+  final Duration _transportTimeout;
+  final Duration reconnectBaseDelay;
   final Esp32MessageParser _parser = const Esp32MessageParser();
-
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _subscription;
   Timer? _heartbeatTimer;
   Timer? _connectionTimer;
   Timer? _reconnectTimer;
   Completer<bool>? _pendingHandshake;
-  int _socketGeneration = 0;
-  bool _isDiscovering = false;
-  String? _connectionWebsocketUrl;
-
   MachineState _state = const MachineState();
   final List<MachineEvent> _events = [];
   int _connectionGeneration = 0;
   int _reconnectAttempt = 0;
+  int _attempt = 0;
   bool _manualDisconnect = false;
+  bool _desiredConnection = false;
   bool _manualControlsLocked = false;
   bool _disposed = false;
+  bool _inactive = false;
+  bool _connectOnResume = false;
+  bool _testing = false;
+  bool _transportOpen = false;
+  bool _readyReceived = false;
+  String _phase = 'disconnected';
+  String? _lastErrorCode;
+  String? _lastTechnicalError;
+  String _previousUrl;
+  bool _previousAutoReconnect;
+  String? _connectionWebsocketUrl;
 
   MachineState get state => _state;
   List<MachineEvent> get events => List.unmodifiable(_events);
   bool get manualControlsLocked => _manualControlsLocked;
   String get settingsWebsocketUrl => _settings.settings.websocketUrl;
-  bool get isDiscovering => _isDiscovering;
   bool get isConnecting => _state.connection == ConnectionPhase.connecting;
+  String get phase => _phase;
+  bool get transportOpen => _transportOpen;
+  bool get protocolReady => _state.isConnected;
+  String? get lastErrorCode => _lastErrorCode;
+  String? get lastTechnicalError => _lastTechnicalError;
+  int get reconnectAttempts => _reconnectAttempt;
   String? get connectionWebsocketUrl =>
       _connectionWebsocketUrl ??
       (settingsWebsocketUrl.isEmpty ? null : settingsWebsocketUrl);
   String? get deviceAddress =>
-      Uri.tryParse(connectionWebsocketUrl ?? '')?.host.isNotEmpty == true
-      ? Uri.parse(connectionWebsocketUrl!).host
-      : null;
+      EndpointValidation.parse(connectionWebsocketUrl ?? '')?.host;
   String get connectionStatusLabel => _state.isConnected
       ? 'Conectado'
-      : _isDiscovering
-      ? 'Buscando'
       : isConnecting
       ? 'Conectando'
       : _state.connection == ConnectionPhase.error
-      ? 'No encontrado'
+      ? 'Error'
       : 'Desconectado';
-
   bool get canStartMovement =>
       _state.isConnected &&
       !_state.sequenceActive &&
       _state.activeMovement == null &&
       _state.finalLimitActive != true &&
-      !_manualControlsLocked;
-
+      !_manualControlsLocked &&
+      !_inactive &&
+      !_testing;
   bool get canUseAuxiliaryControls =>
       _state.isConnected &&
       !_state.sequenceActive &&
-      _state.activeMovement == null;
-
-  bool get canStartSequence =>
-      _state.isConnected &&
-      !_state.sequenceActive &&
       _state.activeMovement == null &&
-      _state.finalLimitActive != true;
+      !_inactive &&
+      !_testing;
+  bool get canStartSequence =>
+      canUseAuxiliaryControls && _state.finalLimitActive != true;
 
   Future<void> connect() async {
-    if (_disposed || isConnecting || _state.isConnected) return;
-    await _connectFlow();
-  }
-
-  Future<void> searchEsp32() async {
-    if (_disposed || isConnecting) return;
-    final closing = disconnect(reason: 'Preparando búsqueda del ESP32…');
-    final generation = _connectionGeneration;
-    await closing;
-    if (_isCurrent(generation)) await _connectFlow(discoveryFirst: true);
-  }
-
-  Future<void> _connectFlow({bool discoveryFirst = false}) async {
-    final generation = ++_connectionGeneration;
+    if (_disposed || _inactive || isConnecting || _state.isConnected) return;
+    _desiredConnection = true;
+    _connectOnResume = false;
     _manualDisconnect = false;
     _reconnectTimer?.cancel();
-    _discovery.cancel();
+    final generation = ++_connectionGeneration;
     _closeSocket();
     _stopHeartbeat();
-    _isDiscovering = false;
-    _connectionWebsocketUrl = null;
-
-    _state = _state.copyWith(
+    _lastErrorCode = null;
+    _lastTechnicalError = null;
+    _readyReceived = false;
+    _connectionWebsocketUrl = settingsWebsocketUrl;
+    ++_attempt;
+    _phase = 'validating_endpoint';
+    _state = MachineState(
       connection: ConnectionPhase.connecting,
-      activeMovement: null,
-      sequence: SequencePhase.idle,
-      sequenceStep: null,
-      sequenceStepLabel: null,
-      plateDetected: null,
-      finalLimitActive: null,
-      lastSensorPacket: null,
-      lastStatus: 'Conectando al ESP32…',
-      connectionError: null,
+      lastStatus: 'Validando dirección del ESP32…',
     );
+    _log('Inicio de intento de conexión con el ESP32');
     notifyListeners();
-
-    final knownUrl = _settings.settings.websocketUrl;
-    if (!discoveryFirst && knownUrl.isNotEmpty) {
-      final knownUri = Uri.tryParse(knownUrl);
-      if (knownUri != null &&
-          (knownUri.scheme == 'ws' || knownUri.scheme == 'wss') &&
-          knownUri.host.isNotEmpty) {
-        if (await _attemptWebsocket(knownUri, generation)) return;
-      } else {
-        _addEvent(
-          'La dirección guardada no es válida',
-          MachineEventLevel.warning,
-        );
-      }
+    final uri = EndpointValidation.parse(settingsWebsocketUrl);
+    if (uri == null) {
+      _desiredConnection = false;
+      _handleDisconnect(
+        'La dirección configurada para el ESP32 no es válida. Configúrala en Ajustes.',
+        generation,
+        isError: true,
+        code: 'INVALID_ENDPOINT',
+        technical: 'URL vacía o inválida',
+      );
+      return;
     }
-    if (!_isCurrent(generation)) return;
-
-    _isDiscovering = true;
-    _state = _state.copyWith(lastStatus: 'Buscando ESP32 en $wifiName…');
-    _addEvent('Buscando ESP32 por UDP');
-    notifyListeners();
-    if (!_isCurrent(generation)) return;
-    Uri? candidate;
-    try {
-      candidate = await _discovery.discover();
-    } catch (_) {
-      _addEvent('No se pudo buscar en la red local', MachineEventLevel.warning);
-    }
-    if (!_isCurrent(generation)) return;
-    _isDiscovering = false;
-    if (candidate != null) {
-      _addEvent('Candidato encontrado: ${candidate.host}');
-      if (await _attemptWebsocket(candidate, generation)) {
-        if (_isCurrent(generation) && _state.isConnected) {
-          try {
-            await _settings.setWebsocketUrl(candidate.toString());
-          } catch (_) {
-            if (_isCurrent(generation)) {
-              _addEvent(
-                'Conectado; no se pudo guardar la dirección',
-                MachineEventLevel.warning,
-              );
-              notifyListeners();
-            }
-          }
-        }
-        return;
-      }
-    }
-    if (!_isCurrent(generation)) return;
-    _setDisconnected(
-      'ESP32 no encontrado. Conecta a $wifiName o configura la URL manual.',
-      isError: true,
-    );
-    if (!_manualDisconnect && _settings.settings.autoReconnect) {
-      _scheduleReconnect();
-    }
-  }
-
-  bool _isCurrent(int generation) =>
-      !_disposed && generation == _connectionGeneration;
-
-  Future<bool> _attemptWebsocket(Uri uri, int generation) async {
-    if (!_isCurrent(generation)) return false;
-    _closeSocket();
-    final socketGeneration = _socketGeneration;
     final handshake = Completer<bool>();
     _pendingHandshake = handshake;
-    _connectionWebsocketUrl = uri.toString();
-    _state = _state.copyWith(
-      lastStatus: 'Esperando READY del ESP32…',
-      plateDetected: null,
-      finalLimitActive: null,
-      lastSensorPacket: null,
-      sequence: SequencePhase.idle,
-      sequenceStep: null,
-      sequenceStepLabel: null,
+    _phase = 'connecting_transport';
+    _log(
+      'Intentando abrir el WebSocket del ESP32',
+      technical: 'timeout=${_transportTimeout.inMilliseconds}ms',
     );
-    _addEvent('Conectando a $uri');
-    notifyListeners();
-    if (!_isCurrent(generation) || socketGeneration != _socketGeneration) {
-      return handshake.future;
-    }
-
-    void failed(String reason) {
-      if (!_isCurrent(generation) || socketGeneration != _socketGeneration) {
-        return;
-      }
-      if (_pendingHandshake != null) {
-        _addEvent(reason, MachineEventLevel.warning);
-        _closeSocket();
-      } else {
-        _handleDisconnect(reason, generation, isError: true);
-      }
-    }
-
     try {
       final channel = _channelFactory(uri);
       _channel = channel;
       _subscription = channel.stream.listen(
-        (data) {
-          if (_isCurrent(generation) && socketGeneration == _socketGeneration) {
-            _onMessage(data);
+        (raw) {
+          if (_isCurrent(generation)) _onMessage(raw);
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          if (!_isCurrent(generation)) return;
+          final failure = ConnectionFailure.classify(error, device: 'el ESP32');
+          _handleDisconnect(
+            failure.humanMessage,
+            generation,
+            isError: true,
+            code: failure.code,
+            technical: '${failure.technicalMessage}\n$stackTrace',
+          );
+        },
+        onDone: () {
+          if (_isCurrent(generation)) {
+            _handleDisconnect(
+              'El ESP32 cerró la conexión.',
+              generation,
+              isError: true,
+              code: 'REMOTE_CLOSED',
+              technical:
+                  'closeCode=${channel.closeCode} closeReason=${channel.closeReason}',
+            );
           }
         },
-        onError: (_) => failed('Error de conexión'),
-        onDone: () => failed('ESP32 desconectado'),
-        cancelOnError: false,
       );
-      // Handle transport errors as well as stream errors; READY is still required.
       unawaited(
-        channel.ready.then<void>(
-          (_) {},
-          onError: (Object _, StackTrace _) {
-            failed('No se pudo abrir el WebSocket');
-          },
-        ),
+        channel.ready
+            .timeout(_transportTimeout)
+            .then<void>(
+              (_) {
+                if (!_isCurrent(generation)) return;
+                _transportOpen = true;
+                _phase = 'websocket_open';
+                _log('WebSocket abierto', technical: 'transport=open');
+                _phase = 'waiting_ready';
+                _log(
+                  'Esperando confirmación READY del ESP32',
+                  technical:
+                      'protocol_ready=false timeout=${_readyTimeout.inMilliseconds}ms',
+                );
+                if (_readyReceived) {
+                  _confirmReady();
+                } else {
+                  _connectionTimer = Timer(_readyTimeout, () {
+                    if (_isCurrent(generation)) {
+                      _handleDisconnect(
+                        'Se abrió la conexión con el ESP32, pero el firmware no confirmó el protocolo de BLANQUITA.',
+                        generation,
+                        isError: true,
+                        code: 'READY_TIMEOUT',
+                        technical:
+                            'transport=open protocol_ready=false timeout=${_readyTimeout.inMilliseconds}ms',
+                      );
+                    }
+                  });
+                }
+                notifyListeners();
+              },
+              onError: (Object error, StackTrace stackTrace) {
+                if (!_isCurrent(generation)) return;
+                final failure = ConnectionFailure.classify(
+                  error,
+                  device: 'el ESP32',
+                );
+                _handleDisconnect(
+                  failure.humanMessage,
+                  generation,
+                  isError: true,
+                  code: failure.code,
+                  technical:
+                      '${failure.technicalMessage}\ntimeout=${_transportTimeout.inMilliseconds}ms\n$stackTrace',
+                );
+              },
+            ),
       );
-      _connectionTimer = Timer(_readyTimeout, () {
-        failed('El ESP32 no envió READY');
-      });
-    } catch (_) {
-      failed('No se pudo conectar');
+    } catch (error, stackTrace) {
+      final failure = ConnectionFailure.classify(error, device: 'el ESP32');
+      _handleDisconnect(
+        failure.humanMessage,
+        generation,
+        isError: true,
+        code: failure.code,
+        technical: '${failure.technicalMessage}\n$stackTrace',
+      );
     }
-    return handshake.future;
+    await handshake.future;
+  }
+
+  bool _isCurrent(int generation) =>
+      !_disposed && generation == _connectionGeneration;
+  void _confirmReady() {
+    _connectionTimer?.cancel();
+    _reconnectAttempt = 0;
+    _phase = 'connected';
+    _state = _state.copyWith(
+      connection: ConnectionPhase.connected,
+      lastStatus: 'ESP32 conectado',
+      connectionError: null,
+    );
+    _log(
+      'ESP32 conectado correctamente',
+      level: ConnectionLogLevel.success,
+      technical: 'transport=open protocol=READY status=connected',
+    );
+    _addEvent('ESP32 conectado', MachineEventLevel.success);
+    final handshake = _pendingHandshake;
+    _pendingHandshake = null;
+    if (handshake != null && !handshake.isCompleted) handshake.complete(true);
   }
 
   void _closeSocket() {
-    ++_socketGeneration;
+    _transportOpen = false;
     _connectionTimer?.cancel();
     _connectionTimer = null;
     final handshake = _pendingHandshake;
@@ -266,56 +275,100 @@ class MachineController extends ChangeNotifier {
     final channel = _channel;
     _subscription = null;
     _channel = null;
-    if (subscription != null) {
-      unawaited(_ignoreCloseError(subscription.cancel()));
-    }
-    if (channel != null) unawaited(_ignoreCloseError(channel.sink.close()));
+    if (subscription != null) unawaited(_closeLogged(subscription.cancel()));
+    if (channel != null) unawaited(_closeLogged(channel.sink.close()));
   }
 
-  Future<void> _ignoreCloseError(Future<dynamic> closing) async {
+  Future<void> _closeLogged(Future<dynamic> closing) async {
     try {
-      await closing;
-    } catch (_) {}
+      await closing.timeout(const Duration(seconds: 2));
+    } catch (error, stackTrace) {
+      _log(
+        'No se pudo completar el cierre del canal',
+        level: ConnectionLogLevel.warning,
+        technical: '${error.runtimeType}: $error\n$stackTrace',
+      );
+    }
   }
 
-  Future<void> disconnect({String reason = 'Conexión cerrada'}) async {
+  Future<void> disconnect({
+    String reason = 'Conexión cerrada manualmente',
+  }) async {
     ++_connectionGeneration;
     _manualDisconnect = true;
+    _desiredConnection = false;
+    _connectOnResume = false;
     _reconnectTimer?.cancel();
-    _discovery.cancel();
-    _isDiscovering = false;
-    _connectionWebsocketUrl = null;
-
-    if (_state.activeMovement != null && _state.isConnected) {
-      try {
-        _channel?.sink.add(Esp32Command.stop.payload);
-      } catch (_) {}
+    _reconnectAttempt = 0;
+    if (_state.isConnected &&
+        (_state.activeMovement != null || _state.sequenceActive)) {
+      _transmit(
+        _state.sequenceActive ? Esp32Command.emergencyStop : Esp32Command.stop,
+      );
     }
     _stopHeartbeat();
-
     _closeSocket();
-
     if (_disposed) return;
-    _state = _state.copyWith(
-      connection: ConnectionPhase.disconnected,
-      activeMovement: null,
-      sequence: SequencePhase.idle,
-      sequenceStep: null,
-      sequenceStepLabel: null,
-      lastStatus: reason,
-      connectionError: null,
-    );
-    _addEvent(reason, MachineEventLevel.warning);
-    notifyListeners();
+    _phase = 'disconnected';
+    _log('Reconexión cancelada manualmente');
+    _setDisconnected(reason, isError: false);
   }
 
   Future<void> reconnect() async {
-    final closing = disconnect(reason: 'Reconectando…');
+    final closing = disconnect(reason: 'Reconectando con el ESP32…');
     final generation = _connectionGeneration;
     await closing;
     if (!_isCurrent(generation)) return;
-    _manualDisconnect = false;
     await connect();
+  }
+
+  /// Reuses a validated connection or validates the configured endpoint; no TX.
+  Future<bool> testConnection() async {
+    if (_state.isConnected) {
+      _log('Prueba: el canal de control ya está validado');
+      return true;
+    }
+    if (isConnecting || _disposed || _inactive) return false;
+    _testing = true;
+    try {
+      await connect();
+      return _state.isConnected;
+    } finally {
+      _testing = false;
+      if (!_disposed) notifyListeners();
+    }
+  }
+
+  void _settingsChanged() {
+    final url = settingsWebsocketUrl;
+    final auto = _settings.settings.autoReconnect;
+    final previousAuto = _previousAutoReconnect;
+    _previousAutoReconnect = auto;
+    if (_previousUrl != url) {
+      _previousUrl = url;
+      _log('URL de control cambiada');
+      final closing = disconnect(reason: 'Dirección del ESP32 actualizada');
+      final generation = _connectionGeneration;
+      final hasEndpoint = url.trim().isNotEmpty;
+      _desiredConnection = hasEndpoint;
+      _manualDisconnect = !hasEndpoint;
+      _connectOnResume = hasEndpoint && _inactive;
+      unawaited(
+        closing.then((_) {
+          if (_isCurrent(generation) && hasEndpoint && !_inactive) {
+            return connect();
+          }
+        }),
+      );
+    } else if (!auto) {
+      _reconnectTimer?.cancel();
+      if (previousAuto) _log('Reconexión automática de control desactivada');
+    } else if (!previousAuto &&
+        _desiredConnection &&
+        !_state.isConnected &&
+        !isConnecting) {
+      _scheduleReconnect();
+    }
   }
 
   bool startMovement(MovementDirection movement) {
@@ -336,6 +389,7 @@ class MachineController extends ChangeNotifier {
   }
 
   void stopMovement([MovementDirection? movement]) {
+    if (_disposed) return;
     final active = _state.activeMovement;
     if (active == null || (movement != null && movement != active)) return;
 
@@ -348,6 +402,40 @@ class MachineController extends ChangeNotifier {
     _addEvent('Movimiento detenido');
     unawaited(_haptics.movementStop());
     notifyListeners();
+  }
+
+  /// STOP must be immediate on unmount; notifications wait for tree teardown.
+  void stopMovementOnUnmount(MovementDirection movement) {
+    if (_disposed || _state.activeMovement != movement) return;
+    final channel = _channel;
+    _stopHeartbeat();
+    Object? failure;
+    try {
+      if (_state.isConnected) channel?.sink.add(Esp32Command.stop.payload);
+    } catch (error) {
+      failure = error;
+    }
+    _state = _state.copyWith(
+      activeMovement: null,
+      lastCommand: Esp32Command.stop.payload,
+      lastStatus: 'Movimiento detenido al salir del control',
+    );
+    scheduleMicrotask(() {
+      if (_disposed) return;
+      if (failure != null) {
+        final problem = ConnectionFailure.classify(failure, device: 'el ESP32');
+        _handleDisconnect(
+          problem.humanMessage,
+          _connectionGeneration,
+          isError: true,
+          code: problem.code,
+          technical: problem.technicalMessage,
+        );
+      } else {
+        _log('Movimiento detenido al salir del control', technical: 'TX=x');
+        notifyListeners();
+      }
+    });
   }
 
   void stopNow() {
@@ -439,24 +527,35 @@ class MachineController extends ChangeNotifier {
   }
 
   void handleAppInactive() {
-    if (_state.activeMovement != null) {
-      stopMovement();
-      _addEvent(
-        'Movimiento detenido por cambio de estado de la app',
-        MachineEventLevel.warning,
+    if (_state.activeMovement != null) stopMovement();
+    _inactive = true;
+    _reconnectTimer?.cancel();
+    _stopHeartbeat();
+    if (isConnecting) {
+      ++_connectionGeneration;
+      _closeSocket();
+      _setDisconnected(
+        'Intento suspendido mientras la app está en segundo plano',
+        isError: false,
       );
-    } else {
-      _stopHeartbeat();
     }
+    _log('Canal de control en segundo plano', phase: 'background');
   }
 
   void handleAppResumed() {
-    if ((_state.connection == ConnectionPhase.disconnected ||
-            _state.connection == ConnectionPhase.error) &&
+    _inactive = false;
+    _log('Canal de control en primer plano', phase: 'foreground');
+    if (_connectOnResume) {
+      _connectOnResume = false;
+      unawaited(connect());
+    } else if (!_state.isConnected &&
+        !isConnecting &&
+        _desiredConnection &&
         _settings.settings.autoReconnect &&
         !_manualDisconnect) {
-      connect();
+      unawaited(connect());
     }
+    notifyListeners();
   }
 
   void clearEvents() {
@@ -472,19 +571,9 @@ class MachineController extends ChangeNotifier {
 
     switch (message.type) {
       case Esp32MessageType.ready:
-        _connectionTimer?.cancel();
-        _reconnectAttempt = 0;
-        _state = _state.copyWith(
-          connection: ConnectionPhase.connected,
-          lastStatus: 'ESP32 conectado',
-          connectionError: null,
-        );
-        _addEvent('ESP32 conectado', MachineEventLevel.success);
-        final handshake = _pendingHandshake;
-        _pendingHandshake = null;
-        if (handshake != null && !handshake.isCompleted) {
-          handshake.complete(true);
-        }
+        _readyReceived = true;
+        _log('READY recibido', phase: 'ready_received');
+        if (_transportOpen) _confirmReady();
       case Esp32MessageType.movementStarted:
         _state = _state.copyWith(lastStatus: 'Movimiento confirmado por ESP32');
       case Esp32MessageType.stopped:
@@ -629,19 +718,27 @@ class MachineController extends ChangeNotifier {
   }
 
   bool _transmit(Esp32Command command, {bool track = true}) {
-    if (!_state.isConnected || _channel == null) return false;
+    if (_disposed || !_state.isConnected || _channel == null) return false;
     try {
       _channel!.sink.add(command.payload);
       if (track) {
         _state = _state.copyWith(lastCommand: command.payload);
       }
-      debugPrint('BLANQUITA -> ${command.payload}');
+      if (track) {
+        _log(
+          'Comando enviado: ${command.label}',
+          technical: 'TX=${command.payload}',
+        );
+      }
       return true;
-    } catch (_) {
+    } catch (error, stackTrace) {
+      final failure = ConnectionFailure.classify(error, device: 'el ESP32');
       _handleDisconnect(
-        'Error enviando comando',
+        failure.humanMessage,
         _connectionGeneration,
         isError: true,
+        code: failure.code,
+        technical: '${failure.technicalMessage}\n$stackTrace',
       );
       return false;
     }
@@ -676,16 +773,29 @@ class MachineController extends ChangeNotifier {
     String reason,
     int generation, {
     bool isError = false,
+    String? code,
+    String technical = '',
   }) {
-    if (_disposed || generation != _connectionGeneration) return;
+    if (!_isCurrent(generation)) return;
+    _lastErrorCode = code;
+    _lastTechnicalError = redactConnectionText(technical);
+    final failedPhase = _phase;
+    _log(
+      reason,
+      level: isError ? ConnectionLogLevel.error : ConnectionLogLevel.warning,
+      code: code,
+      technical: technical,
+      phase: failedPhase,
+    );
     ++_connectionGeneration;
-    _discovery.cancel();
-    _isDiscovering = false;
     _stopHeartbeat();
     _closeSocket();
+    _phase = isError ? 'error' : 'disconnected';
     _setDisconnected(reason, isError: isError);
-
-    if (!_manualDisconnect && _settings.settings.autoReconnect) {
+    if (_desiredConnection &&
+        !_manualDisconnect &&
+        !_inactive &&
+        _settings.settings.autoReconnect) {
       _scheduleReconnect();
     }
   }
@@ -696,6 +806,10 @@ class MachineController extends ChangeNotifier {
           ? ConnectionPhase.error
           : ConnectionPhase.disconnected,
       activeMovement: null,
+      plateDetected: null,
+      finalLimitActive: null,
+      lastSensorPacket: null,
+      gripper: GripperState.unknown,
       sequence: SequencePhase.idle,
       sequenceStep: null,
       sequenceStepLabel: null,
@@ -711,11 +825,44 @@ class MachineController extends ChangeNotifier {
 
   void _scheduleReconnect() {
     _reconnectTimer?.cancel();
-    final seconds = math.min(2 << _reconnectAttempt.clamp(0, 3), 15);
-    _reconnectAttempt++;
-    _reconnectTimer = Timer(Duration(seconds: seconds), () {
-      if (!_disposed && !_manualDisconnect) connect();
+    final ms = math.min(
+      reconnectBaseDelay.inMilliseconds * (1 << _reconnectAttempt.clamp(0, 3)),
+      15000,
+    );
+    ++_reconnectAttempt;
+    _log(
+      'Reconexión de control programada',
+      phase: 'reconnect_scheduled',
+      technical: 'delay=${ms}ms',
+    );
+    _reconnectTimer = Timer(Duration(milliseconds: ms), () {
+      if (!_disposed &&
+          !_manualDisconnect &&
+          !_inactive &&
+          _desiredConnection) {
+        _log('Reconexión de control iniciada', phase: 'reconnecting');
+        unawaited(connect());
+      }
     });
+  }
+
+  void _log(
+    String message, {
+    ConnectionLogLevel level = ConnectionLogLevel.info,
+    String? code,
+    String technical = '',
+    String? phase,
+  }) {
+    _connectionLog.add(
+      channel: ConnectionChannel.control,
+      level: level,
+      humanMessage: message,
+      technicalMessage: technical,
+      errorCode: code,
+      endpoint: connectionWebsocketUrl,
+      phase: phase ?? _phase,
+      attempt: _attempt,
+    );
   }
 
   void _addEvent(
@@ -733,16 +880,17 @@ class MachineController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (_state.isConnected &&
+        (_state.activeMovement != null || _state.sequenceActive)) {
+      _transmit(
+        _state.sequenceActive ? Esp32Command.emergencyStop : Esp32Command.stop,
+      );
+    }
     _disposed = true;
     ++_connectionGeneration;
-    if (_state.activeMovement != null && _state.isConnected) {
-      try {
-        _channel?.sink.add(Esp32Command.stop.payload);
-      } catch (_) {}
-    }
+    _settings.removeListener(_settingsChanged);
     _stopHeartbeat();
     _reconnectTimer?.cancel();
-    _discovery.dispose();
     _closeSocket();
     super.dispose();
   }

@@ -6,6 +6,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 class TestVisionSink implements WebSocketSink {
   final sent = <String>[];
   bool closed = false;
+  Object? closeError;
   final _done = Completer<void>();
   @override
   void add(dynamic data) => sent.add(data as String);
@@ -13,6 +14,7 @@ class TestVisionSink implements WebSocketSink {
   Future<void> close([int? closeCode, String? closeReason]) {
     closed = true;
     if (!_done.isCompleted) _done.complete();
+    if (closeError != null) return Future<void>.error(closeError!);
     return Future<void>.value();
   }
 

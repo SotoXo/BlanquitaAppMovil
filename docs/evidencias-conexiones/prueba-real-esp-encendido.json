@@ -1,0 +1,59 @@
+{
+  "wifi": {
+    "Wi-Fi observado": "Conectado",
+    "IP Wi-Fi del teléfono": "192.168.137.201",
+    "Señal Wi-Fi": "Fuerte (-48 dBm)",
+    "Velocidad de enlace Wi-Fi": "573 Mbps (enlace, no rendimiento medido)",
+    "Observación Wi-Fi": "Sin cortes observados durante 36 s",
+    "Cortes Wi-Fi observados": "0",
+    "Cambios de enlace Wi-Fi": "0",
+    "Ruta principal Wi-Fi": "false",
+    "Internet validado en Wi-Fi": "false",
+    "Última observación Wi-Fi": "2026-10-06T14:25:44.260063"
+  },
+  "tcp_especificamente_wifi": {
+    "control": {
+      "connected": false,
+      "errorCode": "HOST_UNREACHABLE",
+      "technicalMessage": "ConnectException: failed to connect to /192.168.137.209 (port 81) from /192.168.137.201 (port 41136) after 3000ms: isConnected failed: EHOSTUNREACH (No route to host)",
+      "elapsedMs": 2326,
+      "host": "192.168.137.209",
+      "port": 81,
+      "route": "wifi",
+      "humanMessage": "El teléfono no puede alcanzar a ESP32 por Wi-Fi. Revisa la IP actual, equipo encendido, misma LAN y posible aislamiento de clientes."
+    },
+    "vision": {
+      "connected": false,
+      "errorCode": "CONNECT_TIMEOUT",
+      "technicalMessage": "SocketTimeoutException: failed to connect to /192.168.137.27 (port 8765) from /192.168.137.201 (port 51564) after 3000ms",
+      "elapsedMs": 3008,
+      "host": "192.168.137.27",
+      "port": 8765,
+      "route": "wifi",
+      "humanMessage": "El puerto de Vision Server no respondió por Wi-Fi dentro del tiempo permitido. Revisa IP, servidor y comunicación entre clientes."
+    }
+  },
+  "control": {
+    "endpoint": "ws://192.168.137.209:81/",
+    "ready": false,
+    "phase": "error",
+    "transportOpen": false,
+    "errorCode": "CONNECT_TIMEOUT",
+    "humanMessage": "No fue posible establecer comunicación con el ESP32. Verifica la misma red local y la dirección.",
+    "technicalMessage": "TimeoutException: TimeoutException after 0:00:05.000000: Future not completed\ntimeout=5000ms\n#0      Future.timeout.<anonymous closure> (dart:async/future_impl.dart:1042:24)\n<asynchronous suspension>\n#1      MachineController.connect.<anonymous closure> (package:blanquita/core/websocket/machine_controller.dart:186:15)\n<asynchronous suspension>\n",
+    "received": [],
+    "sent": []
+  },
+  "vision": {
+    "endpoint": "ws://192.168.137.27:8765/",
+    "ready": false,
+    "phase": "error",
+    "transportOpen": false,
+    "errorCode": "CONNECT_TIMEOUT",
+    "humanMessage": "No fue posible establecer comunicación con la laptop. Verifica la misma red local y la dirección.",
+    "technicalMessage": "TimeoutException: TimeoutException after 0:00:08.000000: Future not completed timeout=8000ms phase=transport_connect",
+    "received": [],
+    "sent": []
+  },
+  "bitacora": "BLANQUITA CONNECTION DIAGNOSTICS\nGenerated: 2026-10-06T14:25:44.974828\n\nAPP\nNombre: BLANQUITA Víctor\nWi-Fi observado: Conectado\nIP Wi-Fi del teléfono: 192.168.137.201\nSeñal Wi-Fi: Fuerte (-48 dBm)\nVelocidad de enlace Wi-Fi: 573 Mbps (enlace, no rendimiento medido)\nObservación Wi-Fi: Sin cortes observados durante 36 s\nCortes Wi-Fi observados: 0\nCambios de enlace Wi-Fi: 0\nRuta principal Wi-Fi: false\nInternet validado en Wi-Fi: false\nÚltima observación Wi-Fi: 2026-10-06T14:25:44.260063\n\nCONTROL\nEndpoint: ws://192.168.137.209:81/\nEstado: error\n\nVISION\nEndpoint: ws://192.168.137.27:8765/\nEstado: error\n\nEVENTS\n[2026-10-06T14:25:07.111090] CONTROL INFO\nURL de control cargada\nchannel=control phase=endpoint_loaded attempt=0\nendpoint=ws://192.168.137.209:81/\n\n\n[2026-10-06T14:25:07.132860] VISION INFO\nDirección de visión cargada.\nchannel=vision phase=disconnected attempt=0\nendpoint=ws://192.168.137.27:8765/\n\n\n[2026-10-06T14:25:07.157108] SYSTEM INFO\nAplicación iniciada\nchannel=system phase=startup attempt=—\nDos clientes WebSocket independientes; red esperada CARTESIANO\n\n[2026-10-06T14:25:08.215473] NETWORK SUCCESS\nAndroid informa un enlace Wi-Fi conectado.\nchannel=network phase=wifi_observation attempt=—\nWi-Fi observado=Conectado\nIP Wi-Fi del teléfono=192.168.137.201\nSeñal Wi-Fi=Fuerte (-48 dBm)\nVelocidad de enlace Wi-Fi=573 Mbps (enlace, no rendimiento medido)\nObservación Wi-Fi=Observando enlace\nCortes Wi-Fi observados=0\nCambios de enlace Wi-Fi=0\nRuta principal Wi-Fi=false\nInternet validado en Wi-Fi=false\nÚltima observación Wi-Fi=2026-10-06T14:25:08.211085\n\n[2026-10-06T14:25:20.257282] NETWORK INFO\nSin cortes observados durante 12 s\nchannel=network phase=wifi_observation_window attempt=—\nNo es una prueba de alcance de ESP32/laptop ni de Internet.\n\n[2026-10-06T14:25:22.777042] CONTROL INFO\nInicio de intento de conexión con el ESP32\nchannel=control phase=validating_endpoint attempt=1\nendpoint=ws://192.168.137.209:81/\n\n\n[2026-10-06T14:25:22.778853] CONTROL INFO\nIntentando abrir el WebSocket del ESP32\nchannel=control phase=connecting_transport attempt=1\nendpoint=ws://192.168.137.209:81/\ntimeout=5000ms\n\n[2026-10-06T14:25:27.856668] CONTROL ERROR\nNo fue posible establecer comunicación con el ESP32. Verifica la misma red local y la dirección.\nchannel=control phase=connecting_transport attempt=1\nendpoint=ws://192.168.137.209:81/\nERROR_CODE=CONNECT_TIMEOUT\nTimeoutException: TimeoutException after 0:00:05.000000: Future not completed\ntimeout=5000ms\n#0      Future.timeout.<anonymous closure> (dart:async/future_impl.dart:1042:24)\n<asynchronous suspension>\n#1      MachineController.connect.<anonymous closure> (package:blanquita/core/websocket/machine_controller.dart:186:15)\n<asynchronous suspension>\n\n\n[2026-10-06T14:25:27.876711] VISION INFO\nValidando la dirección de la laptop.\nchannel=vision phase=validating_endpoint attempt=0\nendpoint=ws://192.168.137.27:8765/\n\n\n[2026-10-06T14:25:27.878833] VISION INFO\nIntentando abrir el WebSocket de la laptop.\nchannel=vision phase=transport_connect attempt=1\nendpoint=ws://192.168.137.27:8765/\n\n\n[2026-10-06T14:25:29.873457] CONTROL WARNING\nNo se pudo completar el cierre del canal\nchannel=control phase=error attempt=1\nendpoint=ws://192.168.137.209:81/\nTimeoutException: TimeoutException after 0:00:02.000000: Future not completed\n#0      Future.timeout.<anonymous closure> (dart:async/future_impl.dart:1042:24)\n<asynchronous suspension>\n#1      MachineController._closeLogged (package:blanquita/core/websocket/machine_controller.dart:284:7)\n<asynchronous suspension>\n\n\n[2026-10-06T14:25:35.890617] VISION ERROR\nNo fue posible establecer comunicación con la laptop. Verifica la misma red local y la dirección.\nchannel=vision phase=transport_connect attempt=1\nendpoint=ws://192.168.137.27:8765/\nERROR_CODE=CONNECT_TIMEOUT\nTimeoutException: TimeoutException after 0:00:08.000000: Future not completed timeout=8000ms phase=transport_connect\n\n[2026-10-06T14:25:37.907554] VISION WARNING\nNo se pudo completar el cierre del WebSocket de visión. La conexión anterior ya fue descartada.\nchannel=vision phase=error attempt=1\nendpoint=ws://192.168.137.27:8765/\nERROR_CODE=SOCKET_CLOSE_FAILED\nTimeoutException: TimeoutException after 0:00:02.000000: Future not completed\n#0      Future.timeout.<anonymous closure> (dart:async/future_impl.dart:1042:24)\n<asynchronous suspension>\n#1      VisionController._close (package:blanquita/features/vision/controller/vision_controller.dart:500:9)\n<asynchronous suspension>\n#2      VisionController._lost (package:blanquita/features/vision/controller/vision_controller.dart:444:5)\n<asynchronous suspension>\n#3      VisionController.connect (package:blanquita/features/vision/controller/vision_controller.dart:200:9)\n<asynchronous suspension>\n\n\n[2026-10-06T14:25:39.568129] NETWORK INFO\nComprobando el puerto de ESP32 a través de la Wi-Fi.\nchannel=network phase=wifi_tcp_probe attempt=—\nendpoint=ws://192.168.137.209:81/\n\n\n[2026-10-06T14:25:41.923643] NETWORK WARNING\nEl teléfono no puede alcanzar a ESP32 por Wi-Fi. Revisa la IP actual, equipo encendido, misma LAN y posible aislamiento de clientes.\nchannel=network phase=wifi_tcp_probe attempt=—\nendpoint=ws://192.168.137.209:81/\nERROR_CODE=HOST_UNREACHABLE\n{connected: false, errorCode: HOST_UNREACHABLE, technicalMessage: ConnectException: failed to connect to /192.168.137.209 (port 81) from /192.168.137.201 (port 41136) after 3000ms: isConnected failed: EHOSTUNREACH (No route to host), elapsedMs: 2326, host: 192.168.137.209, port: 81, route: wifi}\n\n[2026-10-06T14:25:41.929686] NETWORK INFO\nComprobando el puerto de Vision Server a través de la Wi-Fi.\nchannel=network phase=wifi_tcp_probe attempt=—\nendpoint=ws://192.168.137.27:8765/\n\n\n[2026-10-06T14:25:44.952802] NETWORK WARNING\nEl puerto de Vision Server no respondió por Wi-Fi dentro del tiempo permitido. Revisa IP, servidor y comunicación entre clientes.\nchannel=network phase=wifi_tcp_probe attempt=—\nendpoint=ws://192.168.137.27:8765/\nERROR_CODE=CONNECT_TIMEOUT\n{connected: false, errorCode: CONNECT_TIMEOUT, technicalMessage: SocketTimeoutException: failed to connect to /192.168.137.27 (port 8765) from /192.168.137.201 (port 51564) after 3000ms, elapsedMs: 3008, host: 192.168.137.27, port: 8765, route: wifi}\n\n"
+}

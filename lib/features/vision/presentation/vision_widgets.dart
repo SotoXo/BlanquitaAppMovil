@@ -8,7 +8,11 @@ String visionConnectionLabel(VisionState state) => switch (state.connection) {
   VisionConnection.disconnected => 'Desconectada',
   VisionConnection.connecting => 'Conectando',
   VisionConnection.connected =>
-    state.stale ? 'Conectada · sin heartbeat' : 'Conectada',
+    state.stale
+        ? 'WebSocket abierto · sin heartbeat'
+        : state.ready
+        ? 'Vision Server listo'
+        : 'WebSocket abierto · esperando vision.ready',
   VisionConnection.reconnecting => 'Reconectando',
   VisionConnection.error => 'Error de conexión',
 };

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import '../../../core/network/connection_failure.dart';
 import '../domain/vision_message.dart';
 import 'vision_protocol_parser.dart';
 
@@ -15,14 +16,8 @@ class RemoteVisionService {
 
   VisionSession open(Uri uri) => VisionSession(_channelFactory(uri));
 
-  static bool isValidUrl(String value) {
-    final uri = Uri.tryParse(value.trim());
-    return uri != null &&
-        (uri.scheme == 'ws' || uri.scheme == 'wss') &&
-        uri.host.isNotEmpty &&
-        !uri.hasFragment &&
-        uri.userInfo.isEmpty;
-  }
+  static bool isValidUrl(String value) =>
+      EndpointValidation.parse(value) != null;
 }
 
 class VisionSession {

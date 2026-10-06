@@ -17,7 +17,9 @@ Laptop WebSocket → RemoteVisionService / VisionSession
                 → VisionController (ChangeNotifier)
                 → VisionState → Provider → pantallas
 
-MachineController → WebSocket ESP32 + discovery UDP (sin cambios)
+MachineController → WebSocket ESP32 configurado → READY
+
+Ambos controladores → ConnectionLog → Diagnósticos / portapapeles
 ```
 
 VisionController se crea en main y vive con BlanquitaApp. Cambiar entre Inicio,
@@ -28,8 +30,13 @@ controlador por separado y conserva el comportamiento de seguridad del ESP32.
 
 1. Configurar URL en Ajustes → Conexión visión, por ejemplo
    `ws://<IP-laptop>:8765/` o `wss://<host>/vision`. No hay IP predeterminada.
+   El log de servidor aportado después indica escucha en `0.0.0.0:8765`;
+   usar su IP LAN real como destino, no `0.0.0.0`. Esta evidencia actual reemplaza
+   el puerto 6580 mencionado previamente. No se utiliza el anuncio de descubrimiento
+   del servidor para localizar la laptop: se configura su URL WebSocket.
 2. Pulsar Conectar. Se abre un socket exclusivo de visión con timeout de 8 s.
-3. WebSocket conectado y Vision Server ready son estados distintos.
+3. WebSocket conectado y Vision Server ready son estados distintos. La apertura
+   del transporte inicia la espera de `vision.ready`, sin asumir validación.
    `vision.ready` con payload vacío comunica ready; `ready: false` lo revoca.
 4. Recibir JSON, validar envelope y campos conocidos, actualizar telemetría.
 5. Iniciar visor / Detener visor / Ping solo envían `vision.start`,
@@ -143,13 +150,18 @@ crudos ni payload de motores mediante el API de transporte.
 ## Reconexión y lifecycle
 
 Con reconexión habilitada, errores de transporte y cierre remoto reintentan en
-1, 2, 4, 8, 16 y hasta 30 s. El contador se reinicia al recibir ready o heartbeat,
-no simplemente al abrir TCP. Los cambios de ajuste y desconexión manual cancelan
+1, 2, 4, 8, 16 y hasta 30 s. El contador se reinicia al recibir `vision.ready`,
+no al abrir TCP ni al recibir un heartbeat. Los cambios de ajuste y desconexión manual cancelan
 reintentos pendientes. Intentos obsoletos no pueden reactivar una sesión cancelada.
 
 Al salir del primer plano se cierra visión y se marca stale. Al volver se intenta
 conectar si la sesión era deseada y la reconexión está habilitada. Si el usuario
 había desconectado, no se abre automáticamente.
+
+Editar explícitamente la URL inicia una conexión al nuevo endpoint aunque la
+reconexión automática esté desactivada. Si la edición ocurre en segundo plano,
+ese intento explícito se conserva para el siguiente regreso al primer plano.
+Desconectar manualmente vuelve a cancelar el deseo de conexión.
 
 ## Ajustes y UI
 
@@ -170,8 +182,19 @@ VisionDetector y VisionService. PositionEstimate se conserva sin cambios.
 Visión muestra conexión, ready, cámara/nombre, detector, calibración, FPS, latencia,
 objeto, coordenadas, confianza, edad y alertas usando las superficies Liquid Glass
 existentes. Sin reportes muestra **Sin datos de visión**. Inicio añade un resumen
-breve. Diagnósticos separa **ESP32 · Control** y **Laptop · Visión** con eventos
-limitados a 80 entradas en memoria; no usa SharedPreferences como historial.
+breve. Diagnósticos separa **ESP32 · CONTROL** y **Laptop · VISIÓN** con tarjetas de
+transporte y protocolo. La bitácora central reúne ambos canales, eventos de sistema,
+error humano y detalle técnico desplegable. **COPIAR BITÁCORA** exporta estado
+y eventos; **LIMPIAR** borra eventos en memoria sin alterar conexiones. No se usa
+SharedPreferences como historial. Ver la [guía de arquitectura](network-architecture.md).
+
+La recepción de telemetría actualiza el estado en cada mensaje válido. Para evitar
+que el historial central desplace los fallos con tráfico repetido, TX `vision.ping`,
+RX `vision.heartbeat` y RX `vision.report` se registran por muestreo: la primera
+entrada y luego como máximo una cada 10 segundos por tipo, con `session_count`
+acumulado en el detalle técnico. El muestreo no reduce la frecuencia de envío,
+recepción ni actualización de telemetría. Los errores y cambios de conexión
+mantienen registro individual. La bitácora central conserva hasta 240 entradas.
 
 ## Validación
 
@@ -186,54 +209,6 @@ lifecycle, cancelación de handshake, ajustes, ambos controladores independiente
 WebSocket real en loopback y navegación. Las pruebas del ESP32 se conservan.
 La prueba loopback no sustituye la comprobación final con la laptop y el robot.
 
-Resultados del 6 de octubre de 2026:
-
-- `flutter analyze`: **No issues found**.
-- `flutter test`: **57 pruebas correctas**, incluidas todas las pruebas existentes
-  de ESP32 y una prueba de monitor/ajustes a 390 × 844 sin errores de layout.
-- `flutter build apk --debug`: **correcto**, Gradle assembleDebug en 17,3 s.
-- APK: `C:\Users\Usuario\Documents\Flutter proyects\blanquita\build\app\outputs\flutter-apk\app-debug.apk`.
-- Dependencias añadidas: **ninguna**. No se modificó pubspec ni su lockfile.
-- Rama: `feat/vision-client`. No se hizo commit ni push.
-
-## Inventario de archivos
-
-11 archivos modificados, relativos a la raíz del proyecto:
-
-```text
-README.md
-lib/main.dart
-lib/app/app.dart
-lib/core/storage/settings_repository.dart
-lib/features/dashboard/presentation/dashboard_screen.dart
-lib/features/diagnostics/presentation/diagnostics_screen.dart
-lib/features/settings/controller/app_settings.dart
-lib/features/settings/controller/settings_controller.dart
-lib/features/settings/presentation/settings_screen.dart
-lib/features/vision/presentation/vision_screen.dart
-test/widget_test.dart
-```
-
-14 archivos nuevos:
-
-```text
-docs/vision-client.md
-lib/features/vision/controller/vision_controller.dart
-lib/features/vision/domain/vision_message.dart
-lib/features/vision/domain/vision_report.dart
-lib/features/vision/domain/vision_state.dart
-lib/features/vision/domain/vision_status.dart
-lib/features/vision/presentation/vision_widgets.dart
-lib/features/vision/services/remote_vision_service.dart
-lib/features/vision/services/vision_protocol_parser.dart
-test/features/vision/remote_vision_service_test.dart
-test/features/vision/support/vision_test_channel.dart
-test/features/vision/vision_controller_test.dart
-test/features/vision/vision_protocol_parser_test.dart
-test/features/vision/vision_settings_test.dart
-```
-
-Eliminado: `lib/features/vision/services/vision_service.dart`, que contenía las
-abstracciones antiguas de cámara/procesamiento local. `PositionEstimate`,
-`MachineController`, protocolo ESP32, discovery UDP y sus pruebas permanecen
-sin cambios.
+Los resultados actuales y la comprobación con hardware se mantienen en
+[network-architecture.md](network-architecture.md). Los conteos/rutas de
+compilaciones históricas no verifican la implementación de esta rama.

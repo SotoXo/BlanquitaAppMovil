@@ -171,7 +171,8 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
 
   @override
   void dispose() {
-    if (_pointer != null) _machine?.stopMovement(widget.movement);
+    if (_pointer != null) _machine?.stopMovementOnUnmount(widget.movement);
+    _pointer = null;
     super.dispose();
   }
 }

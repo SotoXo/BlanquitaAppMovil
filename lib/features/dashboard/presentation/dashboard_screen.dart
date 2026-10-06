@@ -10,6 +10,7 @@ import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/status_widgets.dart';
+import '../../../shared/widgets/wifi_network_panel.dart';
 import '../widgets/cartesian_visualizer.dart';
 import '../../vision/controller/vision_controller.dart';
 import '../../vision/presentation/vision_widgets.dart';
@@ -35,13 +36,23 @@ class DashboardScreen extends StatelessWidget {
               children: [
                 MotionReveal(
                   child: PageHeader(
-                    eyebrow: 'Sistema cartesiano',
+                    eyebrow: 'Sistema cartesiano · Víctor',
                     title: 'BLANQUITA',
                     subtitle: 'Supervisión local del ESP32 único.',
                     trailing: ConnectionBadge(phase: state.connection),
                   ),
                 ),
                 const SizedBox(height: 18),
+                const WifiNetworkPanel(),
+                const SizedBox(height: 14),
+                VisionReadouts(
+                  title: 'Conexiones',
+                  rows: {
+                    'ESP32 · Control': machine.connectionStatusLabel,
+                    'Laptop · Visión': visionConnectionLabel(vision),
+                  },
+                ),
+                const SizedBox(height: 14),
                 if (state.finalLimitActive == true) ...[
                   const MotionReveal(
                     child: SafetyBanner(
@@ -141,8 +152,8 @@ class _ConnectionNotice extends StatelessWidget {
           Expanded(
             child: Text(
               connecting
-                  ? 'Conectando al ESP32 único…'
-                  : 'Sin enlace. Conecta el teléfono a ${MachineController.wifiName}.',
+                  ? 'Conectando con el ESP32…'
+                  : 'Sin enlace con el ESP32. Revisa su URL y la misma red local.',
               maxLines: 2,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(
@@ -170,13 +181,17 @@ class _MachineHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activity = state.finalLimitActive == true
+    final activity = !state.isConnected
+        ? 'Estado no confirmado'
+        : state.finalLimitActive == true
         ? 'Bloqueada por seguridad'
         : state.activeMovement?.label ??
               (state.sequenceActive
                   ? 'Secuencia automática activa'
                   : 'Sistema en reposo');
-    final color = state.finalLimitActive == true
+    final color = !state.isConnected
+        ? AppColors.warning
+        : state.finalLimitActive == true
         ? AppColors.danger
         : state.activeMovement != null || state.sequenceActive
         ? AppColors.cyan
@@ -227,7 +242,9 @@ class _MachineHero extends StatelessWidget {
                     StatusDot(color: color, size: 6),
                     const SizedBox(width: 7),
                     Text(
-                      state.finalLimitActive == true
+                      !state.isConnected
+                          ? 'Sin enlace'
+                          : state.finalLimitActive == true
                           ? 'Seguro'
                           : state.sequenceActive
                           ? 'Auto'

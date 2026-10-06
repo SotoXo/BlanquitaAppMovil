@@ -8,11 +8,12 @@ import '../../../features/diagnostics/presentation/diagnostics_screen.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
+import '../../../shared/widgets/wifi_network_panel.dart';
 import '../controller/app_settings.dart';
 import '../controller/settings_controller.dart';
 import '../../vision/controller/vision_controller.dart';
-import '../../vision/services/remote_vision_service.dart';
 import '../../vision/presentation/vision_widgets.dart';
+import 'endpoint_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -53,12 +54,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
+                const WifiNetworkPanel(),
+                const SizedBox(height: 18),
                 MotionReveal(
                   delay: const Duration(milliseconds: 55),
                   child: _ConnectionPanel(
                     machine: machine,
                     autoReconnect: settings.autoReconnect,
-                    onEdit: () => _editWebsocket(context, controller, machine),
+                    onEdit: () => _editWebsocket(context, controller),
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -212,7 +215,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     _ActionRow(
                       title: 'Vision Server',
-                      subtitle: vision.state.ready ? 'Ready' : 'No disponible',
+                      subtitle: vision.state.ready
+                          ? 'Operativo · READY recibido'
+                          : vision.transportOpen
+                          ? 'WebSocket abierto · esperando READY'
+                          : 'No disponible',
                     ),
                     _ToggleRow(
                       title: 'Reconexión de visión',
@@ -246,6 +253,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       spacing: 8,
                       runSpacing: 8,
                       children: [
+                        GlassButton(
+                          onPressed: vision.isConnecting
+                              ? null
+                              : () => _testVisionConnection(vision),
+                          child: const Text('Probar conexión visión'),
+                        ),
                         GlassButton(
                           onPressed:
                               vision.isConnecting || vision.state.isConnected
@@ -319,99 +332,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _editWebsocket(
     BuildContext context,
     SettingsController settings,
-    MachineController machine,
   ) async {
-    final text = TextEditingController(text: settings.settings.websocketUrl);
     final value = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(CupertinoIcons.link),
-        title: const Text('Dirección WebSocket'),
-        content: TextField(
-          controller: text,
-          keyboardType: TextInputType.url,
-          autocorrect: false,
-          decoration: const InputDecoration(
-            labelText: 'URL',
-            hintText: 'ws://192.168.43.27:81/',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final uri = Uri.tryParse(text.text.trim());
-              final valid =
-                  uri != null &&
-                  (uri.scheme == 'ws' || uri.scheme == 'wss') &&
-                  uri.host.isNotEmpty;
-              if (valid) Navigator.pop(context, text.text.trim());
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
+      builder: (_) => EndpointDialog(
+        title: 'Dirección WebSocket',
+        label: 'URL ESP32',
+        initialValue: settings.settings.websocketUrl,
+        hint: 'ws://192.168.137.209:81/',
       ),
     );
-    text.dispose();
     if (value == null || !context.mounted) return;
     await settings.setWebsocketUrl(value);
-    await machine.reconnect();
   }
 
   Future<void> _editVisionUrl(
     BuildContext context,
     SettingsController settings,
   ) async {
-    final text = TextEditingController(
-      text: settings.settings.visionWebsocketUrl,
-    );
-    final form = GlobalKey<FormState>();
     final value = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('URL Vision Server'),
-        content: Form(
-          key: form,
-          child: TextFormField(
-            controller: text,
-            keyboardType: TextInputType.url,
-            autocorrect: false,
-            decoration: const InputDecoration(
-              labelText: 'URL laptop',
-              hintText: 'ws://192.168.x.x:8765/',
-              helperText: 'Deja vacío para quitar el endpoint.',
-            ),
-            validator: (value) =>
-                value == null ||
-                    value.trim().isEmpty ||
-                    RemoteVisionService.isValidUrl(value)
-                ? null
-                : 'Introduce una URL ws:// o wss:// válida.',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (form.currentState!.validate()) {
-                Navigator.pop(context, text.text.trim());
-              }
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
+      builder: (_) => EndpointDialog(
+        title: 'URL Vision Server',
+        label: 'URL laptop',
+        initialValue: settings.settings.visionWebsocketUrl,
+        hint: 'ws://IP_REAL_LAPTOP:8765/',
       ),
     );
-    // The dialog route still animates after its result completes.
-    await Future<void>.delayed(const Duration(milliseconds: 250));
-    text.dispose();
-    if (value != null) await settings.setVisionWebsocketUrl(value);
+    if (value == null || !context.mounted) return;
+    await settings.setVisionWebsocketUrl(value);
+  }
+
+  Future<void> _testVisionConnection(VisionController vision) async {
+    final ready = await vision.testConnection();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ready
+              ? 'Vision Server respondió READY.'
+              : vision.state.error ?? 'La laptop no confirmó READY.',
+        ),
+      ),
+    );
   }
 }
 
@@ -428,7 +391,7 @@ class _ConnectionPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final connected = machine.state.isConnected;
+    final connected = machine.protocolReady;
     final color = connected ? AppColors.mint : AppColors.warning;
     return GlassPanel(
       emphasis: GlassEmphasis.prominent,
@@ -458,7 +421,7 @@ class _ConnectionPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'ESP32 único',
+                      'Conexión ESP32',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     Text(
@@ -528,10 +491,52 @@ class _ConnectionPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 9),
-          OutlinedButton.icon(
-            onPressed: machine.isConnecting ? null : machine.searchEsp32,
-            icon: const Icon(CupertinoIcons.search, size: 17),
-            label: const Text('Buscar ESP32'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: machine.isConnecting ? null : machine.reconnect,
+                icon: const Icon(CupertinoIcons.arrow_clockwise, size: 17),
+                label: const Text('Reconectar URL ESP32'),
+              ),
+              OutlinedButton.icon(
+                onPressed: machine.isConnecting
+                    ? null
+                    : () async {
+                        final ready = await machine.testConnection();
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              ready
+                                  ? 'ESP32 respondió READY. Prueba sin movimiento.'
+                                  : machine.state.connectionError ??
+                                        'El ESP32 no confirmó READY.',
+                            ),
+                          ),
+                        );
+                      },
+                icon: const Icon(CupertinoIcons.checkmark_shield, size: 17),
+                label: const Text('Probar conexión ESP32'),
+              ),
+              OutlinedButton.icon(
+                onPressed: machine.transportOpen || machine.isConnecting
+                    ? machine.disconnect
+                    : null,
+                icon: const Icon(CupertinoIcons.xmark_circle, size: 17),
+                label: const Text('Desconectar ESP32'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            machine.protocolReady
+                ? 'Operativo · READY recibido'
+                : machine.transportOpen
+                ? 'WebSocket abierto · esperando READY'
+                : 'WebSocket cerrado',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 6),
           Text(

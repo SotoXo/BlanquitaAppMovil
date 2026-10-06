@@ -1,50 +1,77 @@
 # BLANQUITA
 
+Esta rama entrega **BLANQUITA Víctor**, con identificador Android
+`com.example.blanquita.victor`. Puede instalarse junto a la aplicación BLANQUITA
+original; cada una conserva ajustes independientes.
+
 Aplicación Flutter de supervisión y control seguro para el cartesiano BLANQUITA.
+El móvil abre dos WebSockets independientes: uno al ESP32 para control físico y
+otro al Vision Server de la laptop para percepción y telemetría.
 
-## Protocolo actual
+## Empezar
 
-- Red esperada: hotspot externo `CARTESIANO`; Android se conecta desde sus ajustes.
-- Un único ESP32 en modo estación controla motores, pinza, sensores y seguridad.
-- IP por DHCP; WebSocket `ws://<IP>:81/`, sin dirección fija predeterminada.
-- Descubrimiento UDP en puerto `4210`: `BLANQUITA_DISCOVER` → `BLANQUITA_HERE:81`.
-- Una respuesta UDP solo propone una dirección. La conexión requiere `READY`.
-- Movimiento mantenido con `a/d/w/s`, heartbeat `k` cada 200 ms y STOP `x`
-- Pinza `q/e`, secuencia automática `j`, emergencia `z` y velocidad `+/-`
-- Sensores `SENSOR:PLATO`, `SENSOR:FINAL` y `SENSOR:ESTADO`
+```sh
+flutter pub get
+flutter run
+```
+
+1. Conectar móvil, ESP32 y laptop a una LAN común desde los ajustes de cada equipo.
+   `CARTESIANO` es la red esperada como referencia; la app no lee el SSID.
+   En Ajustes y Diagnósticos, revisar primero **Wi-Fi del teléfono**: conexión
+   Android observada, IPv4, señal y continuidad durante el primer plano. Ver Wi-Fi
+   conectado no confirma que ESP32 y laptop sean alcanzables.
+2. En Ajustes, editar **CONTROL · ESP32** con su dirección actual, por ejemplo
+   `ws://192.168.10.10:81/`. No hay IP predeterminada.
+3. Editar **VISIÓN · LAPTOP**, por ejemplo `ws://192.168.10.20:8765/`.
+   El log más reciente indica puerto 8765; la IP aportada es `192.168.137.27`.
+   Su alcance desde el móvil falló en la prueba real y aún debe resolverse.
+   `0.0.0.0` es una dirección de escucha del servidor, no el destino del móvil.
+4. Probar cada conexión. El control requiere `READY`; visión requiere
+   `vision.ready`. Abrir un WebSocket no basta para validar el protocolo.
+5. Ante un fallo, abrir Diagnósticos y pulsar **COPIAR BITÁCORA**. El texto reúne
+   estado, endpoint, fase y eventos con explicación humana y detalles técnicos.
+
+Las URLs se guardan separadamente en `connection.websocket_url` y
+`vision.websocket_url`. El hotspot/router solo aporta conectividad IP.
+Las reconexiones usan la URL configurada; no hay búsqueda automática de equipos.
+
+## Control y seguridad
+
+Un único ESP32 controla motores X/Z, pinza, sensores, secuencias y seguridad física.
+Se conserva movimiento mantenido `a/d/w/s`, heartbeat `k` cada 200 ms durante
+movimiento, STOP `x`, pinza `q/e`, secuencia `j`, emergencia `z` y velocidad `+/-`.
+El control se bloquea sin ESP32 validado y conserva STOP al soltar, final de carrera
+y respuesta segura al lifecycle. La caída de visión no bloquea el control manual.
+
+La laptop captura y procesa cámara/IA. El móvil recibe sus reportes; visión no
+manda comandos físicos al ESP32. No hay video ni procesamiento local de cámara.
+
+## Documentación y verificación
+
+- [Arquitectura, errores y comprobación física](docs/network-architecture.md).
+- [Detección Wi-Fi, calidad y límites de estabilidad](docs/deteccion-wifi.md).
+- [Prueba real: Wi-Fi conectado, servidores no alcanzables](docs/prueba-conexiones-reales.md).
+- [Contrato y comportamiento del cliente de visión](docs/vision-client.md).
+- [Entrega de BLANQUITA Víctor, cambios y validaciones](docs/informe-correccion-conexiones.md).
+
+```sh
+flutter analyze
+flutter test
+flutter build apk --debug
+```
+
+La verificación automatizada no sustituye la comprobación con el teléfono,
+firmware ESP32, servidor de laptop y router/hotspot reales. El firmware `.ino` no
+se encuentra en este repositorio.
 
 ## Estructura
 
-- `lib/core`: protocolo, estado, conexión WebSocket, persistencia y haptics.
-- `lib/features`: dashboard, control, visión, ajustes y diagnósticos.
-- `lib/shared`: superficies glass y componentes visuales reutilizables.
+- `lib/core`: protocolo físico, estado, WebSocket, bitácora y persistencia.
+- `lib/features`: inicio, control, visión, ajustes y diagnósticos.
+- `lib/shared`: componentes y superficies visuales existentes.
 - `lib/app`: tema y navegación global.
 
-Visión es un cliente remoto del Vision Server de la laptop. Mantiene su propio
-WebSocket, controlador global y estado, independientes del ESP32. En Ajustes →
-Conexión visión se configura la URL, reconexión, timeout y confianza mínima.
-No existe captura ni procesamiento local, video, detección simulada o movimiento
-basado en visión. El contrato JSON y la validación están en
-[docs/vision-client.md](docs/vision-client.md).
-
-## Conexión y firmware
-
-Al iniciar, la app prueba la URL guardada durante un máximo de 5 segundos esperando
-`READY`. Si falla, busca por UDP durante 3 segundos (hasta 3 broadcasts), obtiene
-la IP del remitente y valida su WebSocket. Guarda la nueva URL únicamente después
-de `READY`. Si vuelve a cambiar la IP, la reconexión repite este flujo con esperas
-de 2, 4, 8 y hasta 15 segundos entre ciclos; no hay barrido de puertos.
-
-En Ajustes se muestran red, estado, dirección y WebSocket. Se conserva la edición
-manual de la URL y se añade **Buscar ESP32**. Buscar cierra de forma segura el enlace
-anterior y empieza por UDP. Los comandos de movimiento siguen bloqueados hasta
-`READY`; heartbeat, STOP, emergencia y final de carrera conservan su protocolo.
-No se almacena la contraseña del hotspot en Flutter.
-
-El workspace no contiene firmware `.ino`. El cambio mínimo necesario, el protocolo
-y la comprobación con hardware están en [docs/esp32-discovery.md](docs/esp32-discovery.md).
-
-Android conserva `INTERNET` y cleartext para el WebSocket local. No se requieren
-dependencias nuevas, permisos de ubicación, consulta de SSID ni configuración de
-Wi-Fi desde la app. UDP está disponible en plataformas nativas con `dart:io`;
-en navegador se conserva el WebSocket manual, sin búsqueda UDP.
+Android mantiene `INTERNET` y cleartext para `ws://` local. La lectura de conexión
+Wi-Fi usa `ACCESS_NETWORK_STATE` y `ACCESS_WIFI_STATE`, sin escaneo de SSID,
+ubicación ni Nearby Wi-Fi. Los requisitos del SDK
+instalado y futuras migraciones se explican en la guía de arquitectura.
