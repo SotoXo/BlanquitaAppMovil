@@ -340,6 +340,7 @@ void main() {
   });
 
   test('Vision and Machine remain independent in both directions', () async {
+    await settings.setEsp32LaboratoryMode(true);
     await settings.setWebsocketUrl('ws://esp32.test:81/');
     final machineSocket = TestVisionChannel();
     final machine = MachineController(

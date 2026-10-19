@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'features/vision/support/vision_test_channel.dart';
 import 'package:blanquita/features/vision/services/remote_vision_service.dart';
 import 'dart:async';
+import 'package:blanquita/core/models/esp32_device.dart';
 import 'package:blanquita/core/network/esp32_discovery_service.dart';
 import 'features/vision/support/vision_test_discovery.dart';
 
@@ -17,9 +18,10 @@ class _WidgetDiscovery extends Esp32DiscoveryService {
   final Future<Uri?> Function() result;
   int calls = 0;
   @override
-  Future<Uri?> discover() {
+  Future<List<Esp32Device>> discoverDevices() async {
     calls++;
-    return result();
+    await result();
+    return [];
   }
 
   @override
@@ -136,7 +138,10 @@ void main() {
     await tester.tap(find.text('Ajustes'));
     await tester.pumpAndSettle();
     expect(find.text('Abrir diagnósticos'), findsOneWidget);
-    expect(find.text('Red esperada: CARTESIANO'), findsOneWidget);
+    expect(
+      find.text('Red local: hotspot o router · sin depender del SSID'),
+      findsOneWidget,
+    );
     expect(find.text('ESP32: Desconectado'), findsOneWidget);
     expect(find.text('Dirección: Sin dirección'), findsOneWidget);
     expect(find.text('Buscar ESP32'), findsOneWidget);

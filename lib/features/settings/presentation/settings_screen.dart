@@ -12,6 +12,7 @@ import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../controller/app_settings.dart';
 import '../controller/settings_controller.dart';
+import 'esp32_identity_panel.dart';
 import '../../vision/controller/vision_controller.dart';
 import '../../vision/services/remote_vision_service.dart';
 import '../../vision/presentation/vision_widgets.dart';
@@ -356,7 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           autocorrect: false,
           decoration: const InputDecoration(
             labelText: 'URL',
-            hintText: 'ws://192.168.43.27:81/',
+            hintText: 'ws://IP_REAL_ESP32:81/',
           ),
         ),
         actions: [
@@ -569,7 +570,7 @@ class _ConnectionPanel extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'ESP32 único',
+                      'Mi ESP32',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     Text(
@@ -592,7 +593,7 @@ class _ConnectionPanel extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(
-            'Red esperada: ${MachineController.wifiName}',
+            'Red local: hotspot o router · sin depender del SSID',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 6),
@@ -660,6 +661,8 @@ class _ConnectionPanel extends StatelessWidget {
               ).colorScheme.onSurface.withValues(alpha: 0.38),
             ),
           ),
+          const SizedBox(height: 12),
+          const Esp32IdentityPanel(),
         ],
       ),
     );

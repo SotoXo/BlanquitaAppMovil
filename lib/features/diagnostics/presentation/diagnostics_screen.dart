@@ -235,6 +235,13 @@ class _TransportConsole extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 18),
+          Text(
+            'Device ID: ${machine.selectedDevice?.deviceId ?? 'Sin seleccionar'}',
+          ),
+          Text('IP actual: ${machine.deviceAddress ?? 'Sin dirección'}'),
+          Text('Estado: ${machine.linkPhase.label}'),
+          Text('Autenticación: ${machine.authenticationLabel}'),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(

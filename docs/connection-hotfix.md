@@ -1,5 +1,10 @@
 # Hotfix: edición de URLs, autoconexión y lifecycle
 
+> Este documento describe el hotfix anterior. Se conserva la corrección de Ajustes
+> y lifecycle. El flujo de identidad/discovery actual está en
+> [esp32-v2.md](esp32-v2.md): READY antiguo solo se permite explícitamente en
+> laboratorio por URL manual, y V2 requiere vinculación y prueba de credencial.
+
 ## Causa reproducida
 
 Antes de corregir el código, los dos tests de guardar URL fallaban:

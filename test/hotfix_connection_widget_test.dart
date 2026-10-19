@@ -1,4 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:blanquita/core/models/esp32_device.dart';
+import 'support/esp32_test_peer.dart';
 
 import 'package:blanquita/app/app.dart';
 import 'package:blanquita/app/navigation/main_shell.dart';
@@ -22,9 +25,19 @@ class _Discovery extends Esp32DiscoveryService {
   Future<Uri?> Function() result = () async => null;
   int calls = 0;
   @override
-  Future<Uri?> discover() {
+  Future<List<Esp32Device>> discoverDevices() async {
     calls++;
-    return result();
+    final uri = await result();
+    return uri == null
+        ? []
+        : [
+            Esp32Device(
+              deviceId: testDeviceId,
+              name: 'BLANQUITA',
+              deviceType: Esp32Device.cartesianType,
+              ip: uri.host,
+            ),
+          ];
   }
 
   @override
@@ -54,15 +67,27 @@ class _Fixture {
   final espUrls = <Uri>[];
   final visionUrls = <Uri>[];
   final failedHosts = <String>{};
+  bool laboratory = false;
 
   Future<void> load({
     String esp = '',
     String visor = '',
     bool retry = false,
     Completer<void>? saveBarrier,
+    bool oldFirmware = false,
   }) async {
+    laboratory = oldFirmware;
     SharedPreferences.setMockInitialValues({
       'connection.websocket_url': esp,
+      if (!oldFirmware)
+        'esp32.selected_device': jsonEncode(
+          const Esp32Device(
+            deviceId: testDeviceId,
+            name: 'BLANQUITA',
+            deviceType: Esp32Device.cartesianType,
+            ip: '10.0.28.209',
+          ).toJson(),
+        ),
       'vision.websocket_url': visor,
       'connection.auto_reconnect': retry,
       'vision.auto_reconnect': retry,
@@ -81,6 +106,7 @@ class _Fixture {
     machine = MachineController(
       settings,
       discoveryService: espDiscovery,
+      credentialStore: MemoryCredentials()..values[testDeviceId] = testSecret,
       channelFactory: (uri) => open(uri, false),
     );
     vision = VisionController(
@@ -93,14 +119,14 @@ class _Fixture {
 
   TestVisionChannel open(Uri uri, bool visor) {
     (visor ? visionUrls : espUrls).add(uri);
-    final channel = TestVisionChannel();
+    final channel = visor || laboratory ? TestVisionChannel() : Esp32TestPeer();
     channels.add(channel);
     scheduleMicrotask(() {
       if (failedHosts.contains(uri.host)) {
         channel.incoming.addError(StateError('DHCP changed'));
       } else if (visor) {
         channel.receive('vision.ready', DateTime.now());
-      } else {
+      } else if (laboratory) {
         channel.incoming.add('READY');
       }
     });
@@ -123,6 +149,38 @@ class _Fixture {
 }
 
 void main() {
+  testWidgets(
+    'old firmware requires laboratory toggle and manual URL saves without crash',
+    (tester) async {
+      final f = _Fixture();
+      await f.load(oldFirmware: true);
+      await tester.pumpWidget(f.app());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ajustes'));
+      await tester.pumpAndSettle();
+      expect(f.machine.laboratoryEnabled, false);
+      await tester.ensureVisible(find.text('Laboratorio con firmware antiguo'));
+      await tester.tap(find.text('Laboratorio con firmware antiguo'));
+      await tester.pumpAndSettle();
+      expect(f.machine.laboratoryEnabled, true);
+      await tester.ensureVisible(
+        find.text('WebSocket: Sin dirección guardada'),
+      );
+      await tester.tap(find.text('WebSocket: Sin dirección guardada'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'ws://172.20.10.7:81/');
+      await tester.tap(find.text('Guardar'));
+      await tester.pumpAndSettle();
+      expect(f.machine.hasValidConnection, true);
+      expect(f.machine.isAuthorized, false);
+      expect(f.machine.authenticationLabel, contains('sin autenticación'));
+      expect(f.machine.startMovement(MovementDirection.xLeft), true);
+      f.machine.stopMovement();
+      expect(f.channels.single.sink.sent, ['a', 'x']);
+      expect(tester.takeException(), isNull);
+      await f.close(tester);
+    },
+  );
   testWidgets(
     'startup waits through inactivity and starts both discoveries on resume',
     (tester) async {
@@ -200,9 +258,9 @@ void main() {
       expect(f.vision.state.isConnected, false);
       expect(f.settings.settings.visionWebsocketUrl, 'ws://10.0.28.115:8765/');
       expect(f.machine.startMovement(MovementDirection.zUp), true);
-      expect(f.channels.first.sink.sent, ['w']);
+      expect(f.channels.whereType<Esp32TestPeer>().first.commands, ['w']);
       f.machine.stopMovement();
-      expect(f.channels.first.sink.sent, ['w', 'x']);
+      expect(f.channels.whereType<Esp32TestPeer>().first.commands, ['w', 'x']);
       expect(tester.takeException(), isNull);
       await f.close(tester);
     },
@@ -412,13 +470,13 @@ void main() {
       final navigator = tester.state(find.byType(Navigator));
       final shell = tester.state(find.byType(MainShell));
       expect(f.machine.startMovement(MovementDirection.xLeft), true);
-      final oldEspChannel = f.channels.first;
+      final oldEspChannel = f.channels.whereType<Esp32TestPeer>().first;
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.pump();
       expect(f.machine.state.activeMovement, isNull);
-      expect(oldEspChannel.sink.sent, ['a', 'x']);
+      expect(oldEspChannel.commands, ['a', 'x']);
       await tester.pump(const Duration(milliseconds: 600));
-      expect(oldEspChannel.sink.sent, [
+      expect(oldEspChannel.commands, [
         'a',
         'x',
       ], reason: 'inactive must stop the 200 ms heartbeat');

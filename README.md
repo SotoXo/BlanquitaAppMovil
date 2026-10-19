@@ -4,11 +4,16 @@ Aplicación Flutter de supervisión y control seguro para el cartesiano BLANQUIT
 
 ## Protocolo actual
 
-- Red esperada: hotspot externo `CARTESIANO`; Android se conecta desde sus ajustes.
+- Red local: hotspot Android, router privado u otra LAN que permita comunicación
+  entre clientes; no se consulta ni se exige un SSID y no se necesita Internet.
 - Un único ESP32 en modo estación controla motores, pinza, sensores y seguridad.
 - IP por DHCP; WebSocket `ws://<IP>:81/`, sin dirección fija predeterminada.
-- Descubrimiento UDP en puerto `4210`: `BLANQUITA_DISCOVER` → `BLANQUITA_HERE:81`.
-- Una respuesta UDP solo propone una dirección. La conexión requiere `READY`.
+- Firmware actual: activar explícitamente **Laboratorio con firmware antiguo** en
+  Ajustes y guardar `ws://IP_REAL_ESP32:81/`. `READY` habilita pruebas sin autenticación.
+- Discovery V2 preparado en UDP `4210`: `BLANQUITA_DISCOVER_V2` →
+  `BLANQUITA_HERE_V2|deviceId|cartesian-controller|81`. Requiere nuevo firmware.
+- Discovery e identidad pública no autentican. V2 exige credencial física,
+  desafío/respuesta, READY firmado y comandos protegidos por sesión.
 - Movimiento mantenido con `a/d/w/s`, heartbeat `k` cada 200 ms y STOP `x`
 - Pinza `q/e`, secuencia automática `j`, emergencia `z` y velocidad `+/-`
 - Sensores `SENSOR:PLATO`, `SENSOR:FINAL` y `SENSOR:ESTADO`
@@ -37,22 +42,31 @@ recuperación tras volver de WiFi se documentan en
 
 ## Conexión y firmware
 
-Al iniciar, la app prueba la URL guardada durante un máximo de 5 segundos esperando
-`READY`. Si falla, busca por UDP durante 3 segundos (hasta 3 broadcasts), obtiene
-la IP del remitente y valida su WebSocket. Guarda la nueva URL únicamente después
-de `READY`. Si vuelve a cambiar la IP, la reconexión repite este flujo con esperas
-de 2, 4, 8 y hasta 15 segundos entre ciclos; no hay barrido de puertos.
+Sin selección previa, discovery recopila candidatos durante 3 s (hasta tres
+broadcasts), sin conectar al primero. El usuario selecciona y vincula su equipo.
+Con identidad y credencial guardadas, se prueba la URL conocida con handshake V2;
+si falla, se busca únicamente ese deviceId y se actualiza su dirección tras
+autenticar. Se conservan esperas de 2, 4, 8 y hasta 15 s entre ciclos.
 
-En Ajustes se muestran red, estado, dirección y WebSocket. Se conserva la edición
-manual de la URL y se añade **Buscar ESP32**. Buscar cierra de forma segura el enlace
-anterior y empieza por UDP. Los comandos de movimiento siguen bloqueados hasta
-`READY`; heartbeat, STOP, emergencia y final de carrera conservan su protocolo.
-No se almacena la contraseña del hotspot en Flutter.
+En laboratorio se acepta READY exclusivamente en la URL manual, sin autenticación
+ni recuperación automática de otra IP mediante HERE antiguo. Si cambia la IP del
+firmware actual hay que editarla. STOP, emergencia y heartbeat físico k de 200 ms
+conservan sus caracteres; en V2 se encapsulan en mensajes firmados.
 
-El workspace no contiene firmware `.ino`. El cambio mínimo necesario, el protocolo
-y la comprobación con hardware están en [docs/esp32-discovery.md](docs/esp32-discovery.md).
+La clave de vinculación se guarda con `flutter_secure_storage`; la identidad
+pública y la última dirección usan SharedPreferences. No se guarda la contraseña
+del Wi-Fi. Android conserva INTERNET y cleartext local, sin permisos de ubicación.
+El transporte nativo usa ping/pong WebSocket para detectar enlaces silenciosos;
+la parada efectiva al cortar Wi-Fi depende del watchdog del ESP32.
 
-Android conserva `INTERNET` y cleartext para el WebSocket local. No se requieren
-dependencias nuevas, permisos de ubicación, consulta de SSID ni configuración de
-Wi-Fi desde la app. UDP está disponible en plataformas nativas con `dart:io`;
-en navegador se conserva el WebSocket manual, sin búsqueda UDP.
+Contrato Arduino, diagnóstico y límites: [docs/esp32-v2.md](docs/esp32-v2.md).
+Pruebas, archivos y pasos exactos en Android:
+[docs/esp32-android-validation.md](docs/esp32-android-validation.md).
+El contrato antiguo de discovery se conserva como referencia histórica y no
+autoriza control automático. No hay firmware `.ino` en este workspace.
+
+Para desplegar con múltiples dispositivos, compilar con
+`flutter build apk --debug --dart-define=BLANQUITA_MULTI_DEVICE=true`.
+Esta variante bloquea laboratorio incluso con preferencias antiguas activadas.
+UDP requiere plataforma nativa; en navegador se conserva URL manual, sin UDP.
+V2 no está validado contra hardware hasta que Arduino implemente el mismo contrato.

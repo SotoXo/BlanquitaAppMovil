@@ -1,5 +1,10 @@
 # Red de BLANQUITA y complemento UDP del firmware
 
+> Referencia histórica del discovery V1. El controlador Flutter actual no conecta
+> automáticamente usando HERE antiguo. Para firmware existente usar URL manual en
+> modo laboratorio; para evolución usar [esp32-v2.md](esp32-v2.md). READY no autentica
+> y el nombre CARTESIANO no es requisito de la red.
+
 El hotspot externo `CARTESIANO` conecta el teléfono con Flutter y **un solo ESP32**
 en `WIFI_STA`. Ese ESP32 maneja motores X/Z, servo, plato, final de carrera,
 secuencia, heartbeat y WebSocket. No existe otro canal o dispositivo para sensores.

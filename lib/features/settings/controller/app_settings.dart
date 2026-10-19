@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import '../../../core/models/esp32_device.dart';
 
 enum GlassIntensity { low, medium, high }
 
 class AppSettings {
   const AppSettings({
     this.websocketUrl = '',
+    this.esp32LaboratoryMode = false,
+    this.selectedEsp32,
     this.autoReconnect = true,
     this.hapticsEnabled = true,
     this.confirmSequence = true,
@@ -24,6 +27,13 @@ class AppSettings {
   });
 
   final String websocketUrl;
+  static const multiDeviceDeployment = bool.fromEnvironment(
+    'BLANQUITA_MULTI_DEVICE',
+  );
+  final bool esp32LaboratoryMode;
+  final Esp32Device? selectedEsp32;
+  bool get laboratoryEnabled =>
+      esp32LaboratoryMode && !multiDeviceDeployment && selectedEsp32 == null;
   final bool autoReconnect;
   final bool hapticsEnabled;
   final bool confirmSequence;
@@ -43,6 +53,8 @@ class AppSettings {
 
   AppSettings copyWith({
     String? websocketUrl,
+    bool? esp32LaboratoryMode,
+    Object? selectedEsp32 = _unchanged,
     bool? autoReconnect,
     bool? hapticsEnabled,
     bool? confirmSequence,
@@ -62,6 +74,10 @@ class AppSettings {
   }) {
     return AppSettings(
       websocketUrl: websocketUrl ?? this.websocketUrl,
+      esp32LaboratoryMode: esp32LaboratoryMode ?? this.esp32LaboratoryMode,
+      selectedEsp32: identical(selectedEsp32, _unchanged)
+          ? this.selectedEsp32
+          : selectedEsp32 as Esp32Device?,
       autoReconnect: autoReconnect ?? this.autoReconnect,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       confirmSequence: confirmSequence ?? this.confirmSequence,
@@ -83,3 +99,5 @@ class AppSettings {
     );
   }
 }
+
+const _unchanged = Object();

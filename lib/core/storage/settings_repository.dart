@@ -1,7 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/settings/controller/app_settings.dart';
+import '../models/esp32_device.dart';
 
 class SettingsRepository {
   const SettingsRepository(this._preferences);
@@ -11,6 +14,8 @@ class SettingsRepository {
   AppSettings load() {
     return AppSettings(
       websocketUrl: _preferences.getString(_Keys.websocketUrl) ?? '',
+      esp32LaboratoryMode: _preferences.getBool(_Keys.laboratoryMode) ?? false,
+      selectedEsp32: _loadDevice(),
       autoReconnect: _preferences.getBool(_Keys.autoReconnect) ?? true,
       hapticsEnabled: _preferences.getBool(_Keys.hapticsEnabled) ?? true,
       confirmSequence: _preferences.getBool(_Keys.confirmSequence) ?? true,
@@ -56,6 +61,14 @@ class SettingsRepository {
   Future<void> save(AppSettings settings) async {
     await Future.wait([
       _preferences.setString(_Keys.websocketUrl, settings.websocketUrl),
+      _preferences.setBool(_Keys.laboratoryMode, settings.esp32LaboratoryMode),
+      if (settings.selectedEsp32 == null)
+        _preferences.remove(_Keys.selectedEsp32)
+      else
+        _preferences.setString(
+          _Keys.selectedEsp32,
+          jsonEncode(settings.selectedEsp32!.toJson()),
+        ),
       _preferences.setBool(_Keys.autoReconnect, settings.autoReconnect),
       _preferences.setBool(_Keys.hapticsEnabled, settings.hapticsEnabled),
       _preferences.setBool(_Keys.confirmSequence, settings.confirmSequence),
@@ -99,6 +112,16 @@ class SettingsRepository {
     ]);
   }
 
+  Esp32Device? _loadDevice() {
+    try {
+      return Esp32Device.fromJson(
+        jsonDecode(_preferences.getString(_Keys.selectedEsp32) ?? 'null'),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
   T _enumByName<T extends Enum>(List<T> values, String? name, T fallback) {
     if (name == null) return fallback;
     for (final value in values) {
@@ -109,6 +132,8 @@ class SettingsRepository {
 }
 
 abstract final class _Keys {
+  static const laboratoryMode = 'esp32.laboratory_mode';
+  static const selectedEsp32 = 'esp32.selected_device';
   static const websocketUrl = 'connection.websocket_url';
   static const autoReconnect = 'connection.auto_reconnect';
   static const hapticsEnabled = 'control.haptics';

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/storage/settings_repository.dart';
+import '../../../core/models/esp32_device.dart';
 import 'app_settings.dart';
 
 class SettingsController extends ChangeNotifier {
@@ -24,6 +25,17 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> setWebsocketUrl(String value) =>
       _update(_settings.copyWith(websocketUrl: value.trim()));
+  Future<void> setEsp32LaboratoryMode(bool value) => _update(
+    _settings.copyWith(
+      esp32LaboratoryMode:
+          value &&
+          !AppSettings.multiDeviceDeployment &&
+          _settings.selectedEsp32 == null,
+    ),
+  );
+  Future<void> selectEsp32(Esp32Device? device) => _update(
+    _settings.copyWith(selectedEsp32: device, esp32LaboratoryMode: false),
+  );
   Future<void> setAutoReconnect(bool value) =>
       _update(_settings.copyWith(autoReconnect: value));
   Future<void> setHapticsEnabled(bool value) =>
