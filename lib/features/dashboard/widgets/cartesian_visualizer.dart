@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app/theme/app_theme.dart';
+import '../../../app/design/blanquita_design.dart';
 import '../../../core/models/machine_state.dart';
 import '../../../features/settings/controller/settings_controller.dart';
 
@@ -49,13 +49,16 @@ class _CartesianVisualizerState extends State<CartesianVisualizer>
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsController>().settings;
     final reduceMotion =
-        settings.reduceMotion || MediaQuery.disableAnimationsOf(context);
+        settings.reduceMotion ||
+        settings.performanceMode ||
+        MediaQuery.disableAnimationsOf(context);
     if (reduceMotion && _controller.isAnimating) _controller.stop();
     return RepaintBoundary(
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) => CustomPaint(
           painter: _CartesianPainter(
+            colors: BlanquitaColors.of(context),
             state: widget.state,
             pulse: reduceMotion ? 0.35 : _controller.value,
             brightness: Theme.of(context).brightness,
@@ -76,12 +79,14 @@ class _CartesianVisualizerState extends State<CartesianVisualizer>
 
 class _CartesianPainter extends CustomPainter {
   const _CartesianPainter({
+    required this.colors,
     required this.state,
     required this.pulse,
     required this.brightness,
     required this.sensitivity,
   });
 
+  final BlanquitaColors colors;
   final MachineState state;
   final double pulse;
   final Brightness brightness;
@@ -98,11 +103,9 @@ class _CartesianPainter extends CustomPainter {
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round;
     final faint = Paint()
-      ..color = AppColors.cyan.withValues(alpha: 0.10)
+      ..color = colors.cyan.withValues(alpha: 0.10)
       ..strokeWidth = 1;
-    final active = state.finalLimitActive == true
-        ? AppColors.danger
-        : AppColors.cyan;
+    final active = state.finalLimitActive == true ? colors.danger : colors.cyan;
     final activePaint = Paint()
       ..color = active
       ..style = PaintingStyle.stroke
@@ -182,8 +185,8 @@ class _CartesianPainter extends CustomPainter {
     final gripY = stemBottom + 6;
     final gripperPaint = Paint()
       ..color = switch (state.gripper) {
-        GripperState.open || GripperState.closed => AppColors.mint,
-        GripperState.opening || GripperState.closing => AppColors.cyan,
+        GripperState.open || GripperState.closed => colors.mint,
+        GripperState.opening || GripperState.closing => colors.cyan,
         GripperState.unknown => dim,
       }
       ..style = PaintingStyle.stroke
@@ -211,9 +214,9 @@ class _CartesianPainter extends CustomPainter {
     );
 
     final sensorColor = state.finalLimitActive == true
-        ? AppColors.danger
+        ? colors.danger
         : state.finalLimitActive == false
-        ? AppColors.mint
+        ? colors.mint
         : dim;
     canvas.drawCircle(Offset(right, top), 8, Paint()..color = sensorColor);
     if (state.finalLimitActive == true) {
@@ -221,7 +224,7 @@ class _CartesianPainter extends CustomPainter {
         Offset(right, top),
         13 + pulse * 5,
         Paint()
-          ..color = AppColors.danger.withValues(alpha: 0.35 * (1 - pulse))
+          ..color = colors.danger.withValues(alpha: 0.35 * (1 - pulse))
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2,
       );
@@ -245,6 +248,7 @@ class _CartesianPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CartesianPainter oldDelegate) =>
+      oldDelegate.colors != colors ||
       oldDelegate.state != state ||
       oldDelegate.pulse != pulse ||
       oldDelegate.brightness != brightness ||

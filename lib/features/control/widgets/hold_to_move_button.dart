@@ -1,7 +1,8 @@
+import '../../settings/controller/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app/theme/app_theme.dart';
+import '../../../app/design/blanquita_design.dart';
 import '../../../core/models/machine_state.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../../../features/settings/controller/settings_controller.dart';
@@ -52,19 +53,25 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsController>().settings;
-    final duration = settings.reduceMotion || settings.performanceMode
+    final warm = settings.visualTheme != BlanquitaVisualTheme.original;
+    final duration =
+        settings.reduceMotion ||
+            settings.performanceMode ||
+            MediaQuery.disableAnimationsOf(context)
         ? Duration.zero
         : const Duration(milliseconds: 155);
     final foreground = widget.active
-        ? const Color(0xFF031419)
+        ? BlanquitaColors.of(context).canvas
         : widget.enabled
         ? Theme.of(context).colorScheme.onSurface
-        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.26);
+        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5);
 
     return Semantics(
       button: true,
       enabled: widget.enabled,
-      label: '${widget.label}. Mantener pulsado para mover.',
+      label: widget.enabled
+          ? '${widget.label}. Mantener pulsado para mover.'
+          : '${widget.label}. Deshabilitado. Consulta el motivo del bloqueo.',
       child: Listener(
         behavior: HitTestBehavior.opaque,
         onPointerDown: _onDown,
@@ -77,29 +84,53 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
           child: AnimatedContainer(
             duration: duration,
             curve: Curves.easeOutCubic,
-            constraints: const BoxConstraints(minWidth: 92, minHeight: 84),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 84),
             padding: const EdgeInsets.all(1.2),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(23),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: widget.active
-                    ? [AppColors.cyan, AppColors.cyanDeep]
-                    : [
-                        Colors.white.withValues(
-                          alpha: widget.enabled ? 0.15 : 0.055,
-                        ),
-                        AppColors.cyan.withValues(
-                          alpha: widget.enabled ? 0.07 : 0.02,
-                        ),
-                        Colors.white.withValues(alpha: 0.035),
-                      ],
-              ),
-              boxShadow: widget.active && !settings.performanceMode
+              borderRadius: BorderRadius.circular(warm ? 44 : 23),
+              color: warm
+                  ? (widget.active
+                        ? BlanquitaColors.of(context).cyan
+                        : BlanquitaColors.of(context).graphiteRaised)
+                  : null,
+              border: warm
+                  ? Border.all(
+                      color: widget.active
+                          ? BlanquitaColors.of(context).cyan
+                          : BlanquitaColors.of(
+                              context,
+                            ).cyanDeep.withValues(alpha: .4),
+                    )
+                  : null,
+              gradient: warm
+                  ? null
+                  : LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: widget.active
+                          ? [
+                              BlanquitaColors.of(context).cyan,
+                              BlanquitaColors.of(context).cyanDeep,
+                            ]
+                          : [
+                              Colors.white.withValues(
+                                alpha: widget.enabled ? 0.15 : 0.055,
+                              ),
+                              BlanquitaColors.of(context).cyan.withValues(
+                                alpha: widget.enabled ? 0.07 : 0.02,
+                              ),
+                              Colors.white.withValues(alpha: 0.035),
+                            ],
+                    ),
+              boxShadow:
+                  widget.active &&
+                      !settings.performanceMode &&
+                      settings.shadowsEnabled
                   ? [
                       BoxShadow(
-                        color: AppColors.cyan.withValues(alpha: 0.25),
+                        color: BlanquitaColors.of(
+                          context,
+                        ).cyan.withValues(alpha: 0.25),
                         blurRadius: 22,
                         spreadRadius: -2,
                       ),
@@ -108,13 +139,17 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(21.8),
+                borderRadius: BorderRadius.circular(warm ? 43 : 21.8),
                 color: widget.active
-                    ? AppColors.cyan
+                    ? BlanquitaColors.of(context).cyan
                     : widget.enabled
-                    ? AppColors.graphiteRaised.withValues(alpha: 0.92)
-                    : AppColors.graphite.withValues(alpha: 0.72),
-                gradient: widget.active
+                    ? BlanquitaColors.of(
+                        context,
+                      ).graphiteRaised.withValues(alpha: 0.92)
+                    : BlanquitaColors.of(
+                        context,
+                      ).graphite.withValues(alpha: 0.72),
+                gradient: widget.active || warm
                     ? null
                     : LinearGradient(
                         begin: Alignment.topLeft,
@@ -123,7 +158,9 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
                           Colors.white.withValues(
                             alpha: widget.enabled ? 0.055 : 0.018,
                           ),
-                          AppColors.graphite.withValues(alpha: 0.90),
+                          BlanquitaColors.of(
+                            context,
+                          ).graphite.withValues(alpha: 0.90),
                         ],
                       ),
               ),
@@ -145,14 +182,18 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(widget.icon, size: 29, color: foreground),
+                        Icon(
+                          widget.enabled ? widget.icon : Icons.lock_outline,
+                          size: 26,
+                          color: foreground,
+                        ),
                         const SizedBox(height: 5),
                         Text(
                           widget.label,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: foreground,
-                            fontSize: 10.5,
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.05,
                           ),

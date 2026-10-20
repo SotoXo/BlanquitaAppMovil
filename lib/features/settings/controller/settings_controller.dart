@@ -42,6 +42,29 @@ class SettingsController extends ChangeNotifier {
     return save;
   }
 
+  Future<void> setVisualTheme(BlanquitaVisualTheme value) =>
+      _update(_settings.copyWith(visualTheme: value));
+  Future<void> setFont(BlanquitaFont value) =>
+      _update(_settings.copyWith(font: value));
+  Future<void> setTextSize(BlanquitaTextSize value) =>
+      _update(_settings.copyWith(textSize: value));
+  Future<void> setDensity(BlanquitaDensity value) =>
+      _update(_settings.copyWith(density: value));
+  Future<void> setCustomAccent(int value) =>
+      _update(_settings.copyWith(customAccent: value));
+  Future<void> setShadowsEnabled(bool value) =>
+      _update(_settings.copyWith(shadowsEnabled: value));
+  Future<void> setAssistantEnabled(bool value) =>
+      _update(_settings.copyWith(assistantEnabled: value));
+  Future<void> setAssistantTips(bool value) =>
+      _update(_settings.copyWith(assistantTips: value));
+  Future<void> setAssistantAlerts(bool value) =>
+      _update(_settings.copyWith(assistantAlerts: value));
+  Future<void> setAssistantTechnical(bool value) =>
+      _update(_settings.copyWith(assistantTechnical: value));
+  Future<void> setAssistantAnimations(bool value) =>
+      _update(_settings.copyWith(assistantAnimations: value));
+
   Future<void> setWebsocketUrl(String value) =>
       _update(_settings.copyWith(websocketUrl: value.trim()));
   Future<void> setAutoReconnect(bool value) =>

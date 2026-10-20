@@ -1,8 +1,9 @@
+import '../../../core/diagnostics/connection_log.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app/theme/app_theme.dart';
+import '../../../app/design/blanquita_design.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
@@ -20,10 +21,10 @@ class VisionScreen extends StatelessWidget {
     final report = state.lastReport;
     final settings = context.watch<SettingsController>().settings;
     final color = state.stale || state.error != null
-        ? AppColors.warning
+        ? BlanquitaColors.of(context).warning
         : state.ready
-        ? AppColors.mint
-        : AppColors.steel;
+        ? BlanquitaColors.of(context).mint
+        : BlanquitaColors.of(context).steel;
     final lowConfidence =
         report?.confidence != null &&
         report!.confidence! < settings.visionMinimumConfidence;
@@ -40,9 +41,8 @@ class VisionScreen extends StatelessWidget {
                 const MotionReveal(
                   child: PageHeader(
                     eyebrow: 'Monitor remoto',
-                    title: 'Visor inteligente',
-                    subtitle:
-                        'Estado y detecciones del Vision Server de la laptop.',
+                    title: 'Visión · laptop',
+                    subtitle: 'Conexión, sistema y reportes recibidos.',
                   ),
                 ),
                 const SizedBox(height: 18),
@@ -87,7 +87,7 @@ class VisionScreen extends StatelessWidget {
                         Text(
                           controller.endpoint.isEmpty
                               ? 'Configura la URL del Vision Server en Ajustes.'
-                              : controller.endpoint,
+                              : redactConnectionText(controller.endpoint),
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                         const SizedBox(height: 14),
@@ -159,10 +159,10 @@ class VisionScreen extends StatelessWidget {
                     emphasis: GlassEmphasis.quiet,
                     child: Column(
                       children: [
-                        const Icon(
+                        Icon(
                           CupertinoIcons.viewfinder,
                           size: 32,
-                          color: AppColors.steel,
+                          color: BlanquitaColors.of(context).steel,
                         ),
                         const SizedBox(height: 12),
                         Text(
@@ -207,7 +207,9 @@ class VisionScreen extends StatelessWidget {
                   const SectionLabel('Alertas'),
                   const SizedBox(height: 10),
                   GlassPanel(
-                    borderColor: AppColors.warning.withValues(alpha: 0.3),
+                    borderColor: BlanquitaColors.of(
+                      context,
+                    ).warning.withValues(alpha: 0.3),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

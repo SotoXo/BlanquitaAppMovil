@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/theme/app_theme.dart';
+import '../../app/design/blanquita_design.dart';
 import '../../features/settings/controller/app_settings.dart';
 import '../../features/settings/controller/settings_controller.dart';
 
@@ -36,9 +36,54 @@ class GlassSurface extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsController>().settings;
+    final d = BlanquitaDesign.density(settings);
+    final actualRadius = borderRadius * d;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final glassOn = settings.glassEnabled && !settings.performanceMode;
     final blurOn = glassOn && blur;
+    if (settings.visualTheme != BlanquitaVisualTheme.original) {
+      final colors = BlanquitaColors.of(context);
+      final densityRadius = BorderRadius.circular(BlanquitaDesign.radius * d);
+      Widget content = Material(
+        type: MaterialType.transparency,
+        child: Padding(padding: (padding ?? EdgeInsets.zero) * d, child: child),
+      );
+      return Padding(
+        padding: margin ?? EdgeInsets.zero,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: tint == null
+                ? colors.graphite
+                : Color.alphaBlend(tint!, colors.graphite),
+            gradient: tint == null
+                ? LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [colors.graphiteRaised, colors.graphite],
+                    stops: const [0, .8],
+                  )
+                : null,
+            borderRadius: densityRadius,
+            border: Border.all(
+              color: borderColor ?? colors.cyanDeep.withValues(alpha: .28),
+            ),
+            boxShadow:
+                settings.shadowsEnabled &&
+                    !settings.performanceMode &&
+                    elevation > 0
+                ? [
+                    BoxShadow(
+                      color: colors.canvas.withValues(alpha: .3),
+                      blurRadius: 16,
+                      offset: const Offset(0, 5),
+                    ),
+                  ]
+                : null,
+          ),
+          child: ClipRRect(borderRadius: densityRadius, child: content),
+        ),
+      );
+    }
     final sigma = switch (settings.glassIntensity) {
       GlassIntensity.low => 6.0,
       GlassIntensity.medium => 10.0,
@@ -52,7 +97,9 @@ class GlassSurface extends StatelessWidget {
     final coreTint =
         tint ??
         (isDark
-            ? AppColors.graphiteRaised.withValues(alpha: alpha + 0.72)
+            ? BlanquitaColors.of(
+                context,
+              ).graphiteRaised.withValues(alpha: alpha + 0.72)
             : Colors.white.withValues(alpha: alpha));
     final rimColor =
         borderColor ??
@@ -61,7 +108,7 @@ class GlassSurface extends StatelessWidget {
                 alpha: emphasis == GlassEmphasis.prominent ? 0.17 : 0.11,
               )
             : Colors.white.withValues(alpha: 0.88));
-    final innerRadius = _insetRadius(borderRadius, 1.25);
+    final innerRadius = _insetRadius(actualRadius, 1.25);
 
     Widget core = DecoratedBox(
       decoration: BoxDecoration(
@@ -75,7 +122,9 @@ class GlassSurface extends StatelessWidget {
                 colors: [
                   Colors.white.withValues(alpha: isDark ? 0.072 : 0.55),
                   coreTint,
-                  AppColors.cyan.withValues(alpha: isDark ? 0.015 : 0.022),
+                  BlanquitaColors.of(
+                    context,
+                  ).cyan.withValues(alpha: isDark ? 0.015 : 0.022),
                 ],
               )
             : null,
@@ -103,7 +152,10 @@ class GlassSurface extends StatelessWidget {
           ),
           Material(
             type: MaterialType.transparency,
-            child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+            child: Padding(
+              padding: (padding ?? EdgeInsets.zero) * d,
+              child: child,
+            ),
           ),
         ],
       ),
@@ -118,33 +170,43 @@ class GlassSurface extends StatelessWidget {
 
     final shell = DecoratedBox(
       decoration: BoxDecoration(
-        borderRadius: borderRadius,
+        borderRadius: actualRadius,
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
             Colors.white.withValues(alpha: isDark ? 0.20 : 0.94),
             rimColor,
-            AppColors.cyan.withValues(alpha: isDark ? 0.085 : 0.11),
+            BlanquitaColors.of(
+              context,
+            ).cyan.withValues(alpha: isDark ? 0.085 : 0.11),
             Colors.white.withValues(alpha: isDark ? 0.045 : 0.68),
           ],
         ),
-        boxShadow: elevation <= 0
+        boxShadow:
+            elevation <= 0 ||
+                !settings.shadowsEnabled ||
+                settings.performanceMode
             ? null
             : [
                 BoxShadow(
-                  color: (isDark ? const Color(0xFF001016) : AppColors.steel)
-                      .withValues(
-                        alpha: settings.performanceMode
-                            ? 0.10
-                            : 0.18 * elevation,
-                      ),
+                  color:
+                      (isDark
+                              ? const Color(0xFF001016)
+                              : BlanquitaColors.of(context).steel)
+                          .withValues(
+                            alpha: settings.performanceMode
+                                ? 0.10
+                                : 0.18 * elevation,
+                          ),
                   blurRadius: settings.performanceMode ? 10 : 25,
                   offset: const Offset(0, 13),
                 ),
                 if (glassOn && emphasis == GlassEmphasis.prominent)
                   BoxShadow(
-                    color: AppColors.cyan.withValues(alpha: 0.035),
+                    color: BlanquitaColors.of(
+                      context,
+                    ).cyan.withValues(alpha: 0.035),
                     blurRadius: 30,
                     spreadRadius: -4,
                   ),

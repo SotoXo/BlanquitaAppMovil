@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/theme/app_theme.dart';
+import '../../app/design/blanquita_design.dart';
 import '../../core/network/wifi_network_controller.dart';
 import 'glass_surface.dart';
 
@@ -25,7 +25,9 @@ class WifiNetworkPanel extends StatelessWidget {
         : connected
         ? 'Wi-Fi conectado'
         : 'Wi-Fi activado · sin conexión';
-    final accent = connected ? AppColors.mint : AppColors.warning;
+    final accent = connected
+        ? BlanquitaColors.of(context).mint
+        : BlanquitaColors.of(context).warning;
     final theme = Theme.of(context);
 
     return GlassPanel(
@@ -164,11 +166,11 @@ class _NetworkNotice extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      const ExcludeSemantics(
+      ExcludeSemantics(
         child: Icon(
           CupertinoIcons.exclamationmark_triangle,
           size: 20,
-          color: AppColors.warning,
+          color: BlanquitaColors.of(context).warning,
         ),
       ),
       const SizedBox(width: 8),

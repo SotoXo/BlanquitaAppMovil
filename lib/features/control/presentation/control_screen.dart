@@ -1,8 +1,13 @@
+import '../../assistant/domain/alfresi_context.dart';
+import '../../vision/controller/vision_controller.dart';
+import '../../diagnostics/presentation/diagnostics_screen.dart';
+import '../../../shared/widgets/blanquita/blanquita_lock_state.dart';
+import '../../../shared/widgets/blanquita/blanquita_modal.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app/theme/app_theme.dart';
+import '../../../app/design/blanquita_design.dart';
 import '../../../core/models/machine_state.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../../../features/settings/controller/settings_controller.dart';
@@ -20,6 +25,11 @@ class ControlScreen extends StatelessWidget {
     final machine = context.watch<MachineController>();
     final state = machine.state;
     final preferences = context.watch<SettingsController>().settings;
+    final lockReason = AlfresiContext.read(
+      machine,
+      context.watch<VisionController>(),
+      'Control',
+    ).lockReason;
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
@@ -41,14 +51,26 @@ class ControlScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 15),
                 if (state.finalLimitActive == true) ...[
-                  const SafetyBanner(
+                  SafetyBanner(
                     icon: CupertinoIcons.exclamationmark_triangle,
                     title: 'Final de carrera activado',
                     message:
                         'Movimiento bloqueado por seguridad. Pinza y STOP siguen disponibles.',
-                    color: AppColors.danger,
+                    color: BlanquitaColors.of(context).danger,
                   ),
                   const SizedBox(height: 12),
+                ],
+                if (lockReason != null) ...[
+                  BlanquitaLockState(
+                    reason: lockReason,
+                    critical: state.finalLimitActive == true,
+                    onDiagnostic: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const DiagnosticsScreen(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                 ],
                 MotionReveal(
                   delay: const Duration(milliseconds: 60),
@@ -60,6 +82,8 @@ class ControlScreen extends StatelessWidget {
                         preferences.connectionLossAlerts,
                   ),
                 ),
+                const SizedBox(height: 14),
+                _EmergencyDock(machine: machine),
                 const SizedBox(height: 16),
                 MotionReveal(
                   delay: const Duration(milliseconds: 115),
@@ -70,8 +94,6 @@ class ControlScreen extends StatelessWidget {
                   delay: const Duration(milliseconds: 165),
                   child: _SequencePanel(machine: machine),
                 ),
-                const SizedBox(height: 14),
-                _EmergencyDock(machine: machine),
               ],
             ),
           ),
@@ -95,12 +117,12 @@ class _ControlConsole extends StatelessWidget {
     final state = machine.state;
     final locked = machine.manualControlsLocked;
     final accent = state.finalLimitActive == true
-        ? AppColors.danger
+        ? BlanquitaColors.of(context).danger
         : state.activeMovement != null
-        ? AppColors.cyan
+        ? BlanquitaColors.of(context).cyan
         : locked
-        ? AppColors.warning
-        : AppColors.mint;
+        ? BlanquitaColors.of(context).warning
+        : BlanquitaColors.of(context).mint;
     return GlassPanel(
       emphasis: GlassEmphasis.prominent,
       padding: const EdgeInsets.fromLTRB(15, 14, 15, 16),
@@ -123,7 +145,9 @@ class _ControlConsole extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       state.activeMovement == null
-                          ? 'Heartbeat listo · 200 ms'
+                          ? (state.isConnected
+                                ? 'Mantén pulsado para mover'
+                                : 'Sin enlace · movimiento deshabilitado')
                           : 'Motor activo · suelta para detener',
                       style: Theme.of(
                         context,
@@ -144,7 +168,9 @@ class _ControlConsole extends StatelessWidget {
                       ? () => machine.setManualControlsLocked(!locked)
                       : null,
                   child: GlassChip(
-                    color: locked ? AppColors.warning : AppColors.mint,
+                    color: locked
+                        ? BlanquitaColors.of(context).warning
+                        : BlanquitaColors.of(context).mint,
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -153,7 +179,9 @@ class _ControlConsole extends StatelessWidget {
                               ? CupertinoIcons.lock_fill
                               : CupertinoIcons.lock_open,
                           size: 14,
-                          color: locked ? AppColors.warning : AppColors.mint,
+                          color: locked
+                              ? BlanquitaColors.of(context).warning
+                              : BlanquitaColors.of(context).mint,
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -161,8 +189,8 @@ class _ControlConsole extends StatelessWidget {
                           style: Theme.of(context).textTheme.labelSmall
                               ?.copyWith(
                                 color: locked
-                                    ? AppColors.warning
-                                    : AppColors.mint,
+                                    ? BlanquitaColors.of(context).warning
+                                    : BlanquitaColors.of(context).mint,
                                 fontWeight: FontWeight.w600,
                               ),
                         ),
@@ -178,15 +206,17 @@ class _ControlConsole extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
               decoration: BoxDecoration(
-                color: AppColors.warning.withValues(alpha: 0.07),
+                color: BlanquitaColors.of(
+                  context,
+                ).warning.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     CupertinoIcons.wifi_slash,
                     size: 16,
-                    color: AppColors.warning,
+                    color: BlanquitaColors.of(context).warning,
                   ),
                   const SizedBox(width: 8),
                   const Expanded(
@@ -221,55 +251,99 @@ class _ControlPad extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = machine.state;
     final enabled = machine.canStartMovement;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 410),
-      child: AspectRatio(
-        aspectRatio: 1.13,
-        child: GridView.count(
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 3,
-          childAspectRatio: 1.18,
-          mainAxisSpacing: 9,
-          crossAxisSpacing: 9,
-          children: [
-            const SizedBox.shrink(),
-            HoldToMoveButton(
-              movement: MovementDirection.zUp,
-              icon: CupertinoIcons.chevron_up,
-              label: 'Subir Z',
-              enabled: enabled || state.activeMovement == MovementDirection.zUp,
-              active: state.activeMovement == MovementDirection.zUp,
-            ),
-            const SizedBox.shrink(),
-            HoldToMoveButton(
-              movement: MovementDirection.xLeft,
-              icon: CupertinoIcons.chevron_left,
-              label: 'Izquierda',
-              enabled:
-                  enabled || state.activeMovement == MovementDirection.xLeft,
-              active: state.activeMovement == MovementDirection.xLeft,
-            ),
-            _StopButton(enabled: state.isConnected, onPressed: machine.stopNow),
-            HoldToMoveButton(
-              movement: MovementDirection.xRight,
-              icon: CupertinoIcons.chevron_right,
-              label: 'Derecha',
-              enabled:
-                  enabled || state.activeMovement == MovementDirection.xRight,
-              active: state.activeMovement == MovementDirection.xRight,
-            ),
-            const SizedBox.shrink(),
-            HoldToMoveButton(
-              movement: MovementDirection.zDown,
-              icon: CupertinoIcons.chevron_down,
-              label: 'Bajar Z',
-              enabled:
-                  enabled || state.activeMovement == MovementDirection.zDown,
-              active: state.activeMovement == MovementDirection.zDown,
-            ),
-            const SizedBox.shrink(),
-          ],
+    final available = (MediaQuery.sizeOf(context).width.clamp(0, 516) - 88) / 3;
+    var labelHeight = 0.0;
+    for (final label in ['Subir Z', 'Bajar Z', 'Izquierda', 'Derecha']) {
+      final measure = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
         ),
+        textScaler: MediaQuery.textScalerOf(context),
+        textDirection: Directionality.of(context),
+      )..layout(maxWidth: available - 4);
+      if (measure.height > labelHeight) labelHeight = measure.height;
+      measure.dispose();
+    }
+    final height =
+        (labelHeight + 70) *
+        BlanquitaDesign.density(context.watch<SettingsController>().settings);
+    Widget move(MovementDirection direction, IconData icon, String label) =>
+        HoldToMoveButton(
+          movement: direction,
+          icon: icon,
+          label: label,
+          enabled: enabled || state.activeMovement == direction,
+          active: state.activeMovement == direction,
+        );
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 480),
+      child: Column(
+        children: [
+          SizedBox(
+            height: height,
+            child: Row(
+              children: [
+                const Spacer(),
+                Expanded(
+                  child: move(
+                    MovementDirection.zUp,
+                    CupertinoIcons.chevron_up,
+                    'Subir Z',
+                  ),
+                ),
+                const Spacer(),
+              ],
+            ),
+          ),
+          const SizedBox(height: 9),
+          SizedBox(
+            height: height,
+            child: Row(
+              children: [
+                Expanded(
+                  child: move(
+                    MovementDirection.xLeft,
+                    CupertinoIcons.chevron_left,
+                    'Izquierda',
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: _StopButton(
+                    enabled: state.isConnected,
+                    onPressed: machine.stopNow,
+                  ),
+                ),
+                const SizedBox(width: 9),
+                Expanded(
+                  child: move(
+                    MovementDirection.xRight,
+                    CupertinoIcons.chevron_right,
+                    'Derecha',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 9),
+          SizedBox(
+            height: height,
+            child: Row(
+              children: [
+                const Spacer(),
+                Expanded(
+                  child: move(
+                    MovementDirection.zDown,
+                    CupertinoIcons.chevron_down,
+                    'Bajar Z',
+                  ),
+                ),
+                const Spacer(),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -304,38 +378,42 @@ class _StopButtonState extends State<_StopButton> {
         duration: const Duration(milliseconds: 140),
         curve: Curves.easeOutCubic,
         child: AnimatedOpacity(
-          opacity: widget.enabled ? 1 : 0.28,
+          opacity: widget.enabled ? 1 : 0.7,
           duration: const Duration(milliseconds: 160),
           child: Container(
             margin: const EdgeInsets.all(9),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.danger.withValues(alpha: 0.11),
+              color: BlanquitaColors.of(context).danger,
               border: Border.all(
-                color: AppColors.danger.withValues(alpha: 0.40),
+                color: BlanquitaColors.of(
+                  context,
+                ).danger.withValues(alpha: 0.40),
               ),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.danger.withValues(
-                    alpha: _pressed ? 0.17 : 0.06,
-                  ),
+                  color: BlanquitaColors.of(
+                    context,
+                  ).danger.withValues(alpha: _pressed ? 0.17 : 0.06),
                   blurRadius: _pressed ? 17 : 10,
                 ),
               ],
             ),
-            child: const Column(
+            child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  CupertinoIcons.stop_fill,
-                  color: AppColors.danger,
+                  widget.enabled
+                      ? CupertinoIcons.stop_fill
+                      : CupertinoIcons.lock_fill,
+                  color: Colors.white,
                   size: 25,
                 ),
-                SizedBox(height: 3),
-                Text(
+                const SizedBox(height: 3),
+                const Text(
                   'STOP',
                   style: TextStyle(
-                    color: AppColors.danger,
+                    color: Colors.white,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.8,
@@ -361,17 +439,20 @@ class _ToolDeck extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 8,
             children: [
-              const Expanded(child: SectionLabel('Pinza')),
+              Text('Pinza', style: Theme.of(context).textTheme.titleMedium),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 220),
                 child: Text(
                   _gripperLabel(machine.state.gripper),
                   key: ValueKey(machine.state.gripper),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelMedium?.copyWith(color: AppColors.cyan),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: BlanquitaColors.of(context).cyan,
+                  ),
                 ),
               ),
             ],
@@ -384,11 +465,12 @@ class _ToolDeck extends StatelessWidget {
                   onPressed: machine.canUseAuxiliaryControls
                       ? machine.openGripper
                       : null,
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: const Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
                     children: [
                       Icon(CupertinoIcons.arrow_left_right, size: 17),
-                      SizedBox(width: 8),
                       Text('Abrir'),
                     ],
                   ),
@@ -400,11 +482,12 @@ class _ToolDeck extends StatelessWidget {
                   onPressed: machine.canUseAuxiliaryControls
                       ? machine.closeGripper
                       : null,
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: const Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
                     children: [
                       Icon(CupertinoIcons.arrow_right_arrow_left, size: 17),
-                      SizedBox(width: 8),
                       Text('Cerrar'),
                     ],
                   ),
@@ -429,7 +512,7 @@ class _ToolDeck extends StatelessWidget {
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.38),
+                        ).colorScheme.onSurface.withValues(alpha: 0.72),
                       ),
                     ),
                   ],
@@ -486,8 +569,8 @@ class _CompactAction extends StatelessWidget {
         borderRadius: BorderRadius.circular(15),
         onTap: onTap,
         child: Container(
-          width: 47,
-          height: 47,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
             color: Theme.of(
               context,
@@ -534,14 +617,14 @@ class _SequencePanel extends StatelessWidget {
               const Expanded(child: SectionLabel('Secuencia automática')),
               if (state.sequenceActive)
                 GlassChip(
-                  color: AppColors.cyan,
+                  color: BlanquitaColors.of(context).cyan,
                   child: Text(
                     state.sequenceStep == null
                         ? 'Preparando'
                         : '${state.sequenceStep}/8',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: AppColors.cyan),
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: BlanquitaColors.of(context).cyan,
+                    ),
                   ),
                 ),
             ],
@@ -597,25 +680,22 @@ class _SequencePanel extends StatelessWidget {
       machine.startSequence();
       return;
     }
-    final accepted = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(CupertinoIcons.play_circle),
-        title: const Text('Iniciar secuencia'),
-        content: const Text(
+    final accepted = await BlanquitaModal.show<bool>(
+      context,
+      type: BlanquitaModalType.confirmation,
+      title: 'Iniciar secuencia',
+      message:
           'Verifica que el área esté libre. El ESP32 ejecutará los ocho pasos de forma autónoma.',
+      actions: (context) => [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar'),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Iniciar'),
-          ),
-        ],
-      ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Iniciar'),
+        ),
+      ],
     );
     if (accepted == true) machine.startSequence();
   }
@@ -641,12 +721,12 @@ class _TimelineStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = complete
-        ? AppColors.mint
+        ? BlanquitaColors.of(context).mint
         : current
-        ? AppColors.cyan
+        ? BlanquitaColors.of(context).cyan
         : cancelled
-        ? AppColors.danger.withValues(alpha: 0.55)
-        : AppColors.steel.withValues(alpha: 0.42);
+        ? BlanquitaColors.of(context).danger.withValues(alpha: 0.55)
+        : BlanquitaColors.of(context).steel.withValues(alpha: 0.42);
     return SizedBox(
       height: isLast ? 36 : 43,
       child: Row(
@@ -708,7 +788,7 @@ class _TimelineStep extends StatelessWidget {
                     ? Theme.of(context).colorScheme.onSurface
                     : Theme.of(
                         context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.54),
+                      ).colorScheme.onSurface.withValues(alpha: 0.72),
                 fontWeight: current ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
@@ -717,7 +797,7 @@ class _TimelineStep extends StatelessWidget {
             index.toString().padLeft(2, '0'),
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: color,
-              fontFeatures: const [FontFeature.tabularFigures()],
+              fontFeatures: [const FontFeature.tabularFigures()],
             ),
           ),
         ],
@@ -731,53 +811,53 @@ class _EmergencyDock extends StatelessWidget {
   final MachineController machine;
 
   @override
-  Widget build(BuildContext context) => GlassPanel(
-    padding: const EdgeInsets.fromLTRB(12, 11, 11, 11),
-    borderRadius: BorderRadius.circular(22),
-    tint: AppColors.danger.withValues(alpha: 0.065),
-    borderColor: AppColors.danger.withValues(alpha: 0.28),
-    child: Row(
-      children: [
-        Container(
-          width: 42,
-          height: 42,
-          decoration: BoxDecoration(
-            color: AppColors.danger.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(13),
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    enabled: machine.state.isConnected,
+    label: 'Detención inmediata. Cancela movimiento y secuencia.',
+    child: FilledButton(
+      onPressed: machine.state.isConnected ? machine.emergencyStop : null,
+      style: FilledButton.styleFrom(
+        backgroundColor: BlanquitaColors.of(context).danger,
+        foregroundColor: Colors.white,
+        disabledBackgroundColor: BlanquitaColors.of(
+          context,
+        ).danger.withValues(alpha: .45),
+        disabledForegroundColor: Colors.white,
+        minimumSize: const Size(48, 76),
+        padding: const EdgeInsets.all(18),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            machine.state.isConnected
+                ? Icons.warning_rounded
+                : Icons.lock_outline,
+            size: 30,
           ),
-          child: const Icon(
-            CupertinoIcons.exclamationmark,
-            color: AppColors.danger,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Emergencia', style: Theme.of(context).textTheme.titleSmall),
-              Text(
-                'Cancela movimiento y secuencia',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.44),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'DETENCIÓN INMEDIATA',
+                  style: TextStyle(fontWeight: FontWeight.w800),
                 ),
-              ),
-            ],
+                Text(
+                  machine.state.isConnected
+                      ? 'Detiene movimiento y secuencia'
+                      : 'Sin enlace con el ESP32',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.white),
+                ),
+              ],
+            ),
           ),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.danger,
-            foregroundColor: Colors.white,
-            minimumSize: const Size(94, 46),
-            padding: const EdgeInsets.symmetric(horizontal: 17),
-          ),
-          onPressed: machine.state.isConnected ? machine.emergencyStop : null,
-          child: const Text('DETENER'),
-        ),
-      ],
+        ],
+      ),
     ),
   );
 }

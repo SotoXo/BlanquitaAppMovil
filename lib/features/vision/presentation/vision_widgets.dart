@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../app/theme/app_theme.dart';
+import '../../../app/design/blanquita_design.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../domain/vision_state.dart';
 
@@ -64,9 +64,9 @@ class VisionReadouts extends StatelessWidget {
                   flex: 4,
                   child: Text(
                     entry.key,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: BlanquitaColors.of(context).steel,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -76,7 +76,7 @@ class VisionReadouts extends StatelessWidget {
                     entry.value,
                     textAlign: TextAlign.end,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontFeatures: const [FontFeature.tabularFigures()],
+                      fontFeatures: [const FontFeature.tabularFigures()],
                     ),
                   ),
                 ),

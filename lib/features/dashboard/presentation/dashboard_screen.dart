@@ -1,8 +1,13 @@
+import '../../assistant/presentation/alfresi_bubble.dart';
+import '../../assistant/domain/alfresi_context.dart';
+import '../../assistant/services/alfresi_rules.dart';
+import '../../../shared/widgets/blanquita/blanquita_components.dart';
+import '../../settings/controller/app_settings.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app/theme/app_theme.dart';
+import '../../../app/design/blanquita_design.dart';
 import '../../../core/models/machine_state.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../../../features/settings/controller/settings_controller.dart';
@@ -24,6 +29,9 @@ class DashboardScreen extends StatelessWidget {
     final state = machine.state;
     final preferences = context.watch<SettingsController>().settings;
     final vision = context.watch<VisionController>().state;
+    if (preferences.visualTheme != BlanquitaVisualTheme.original) {
+      return _HamburgerDashboard(machine: machine);
+    }
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
@@ -54,12 +62,12 @@ class DashboardScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 if (state.finalLimitActive == true) ...[
-                  const MotionReveal(
+                  MotionReveal(
                     child: SafetyBanner(
                       icon: CupertinoIcons.exclamationmark_triangle,
                       title: 'Final de carrera activado',
                       message: 'Movimiento bloqueado por seguridad.',
-                      color: AppColors.danger,
+                      color: BlanquitaColors.of(context).danger,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -137,8 +145,8 @@ class _ConnectionNotice extends StatelessWidget {
     return GlassPanel(
       padding: const EdgeInsets.fromLTRB(14, 11, 9, 11),
       borderRadius: BorderRadius.circular(20),
-      tint: AppColors.warning.withValues(alpha: 0.075),
-      borderColor: AppColors.warning.withValues(alpha: 0.25),
+      tint: BlanquitaColors.of(context).warning.withValues(alpha: 0.075),
+      borderColor: BlanquitaColors.of(context).warning.withValues(alpha: 0.25),
       child: Row(
         children: [
           Icon(
@@ -146,7 +154,7 @@ class _ConnectionNotice extends StatelessWidget {
                 ? CupertinoIcons.antenna_radiowaves_left_right
                 : CupertinoIcons.wifi_slash,
             size: 19,
-            color: AppColors.warning,
+            color: BlanquitaColors.of(context).warning,
           ),
           const SizedBox(width: 11),
           Expanded(
@@ -190,12 +198,12 @@ class _MachineHero extends StatelessWidget {
                   ? 'Secuencia automática activa'
                   : 'Sistema en reposo');
     final color = !state.isConnected
-        ? AppColors.warning
+        ? BlanquitaColors.of(context).warning
         : state.finalLimitActive == true
-        ? AppColors.danger
+        ? BlanquitaColors.of(context).danger
         : state.activeMovement != null || state.sequenceActive
-        ? AppColors.cyan
-        : AppColors.mint;
+        ? BlanquitaColors.of(context).cyan
+        : BlanquitaColors.of(context).mint;
 
     return GlassPanel(
       emphasis: GlassEmphasis.prominent,
@@ -212,11 +220,11 @@ class _MachineHero extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Cartesiano 01',
+                      'Robot cartesiano',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: Theme.of(
                           context,
-                        ).colorScheme.onSurface.withValues(alpha: 0.46),
+                        ).colorScheme.onSurface.withValues(alpha: 0.72),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -245,11 +253,13 @@ class _MachineHero extends StatelessWidget {
                       !state.isConnected
                           ? 'Sin enlace'
                           : state.finalLimitActive == true
-                          ? 'Seguro'
+                          ? 'Bloqueado'
                           : state.sequenceActive
                           ? 'Auto'
                           : state.activeMovement != null
                           ? 'Manual'
+                          : state.finalLimitActive == null
+                          ? 'Conectado'
                           : 'Listo',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color: color,
@@ -296,19 +306,19 @@ class _MachineHero extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const Icon(
+                Icon(
                   CupertinoIcons.location_slash,
                   size: 17,
-                  color: AppColors.steel,
+                  color: BlanquitaColors.of(context).steel,
                 ),
                 const SizedBox(width: 9),
                 Expanded(
                   child: Text(
-                    'Posición no calibrada',
+                    'Posición no informada',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(
                         context,
-                      ).colorScheme.onSurface.withValues(alpha: 0.60),
+                      ).colorScheme.onSurface.withValues(alpha: 0.72),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -316,8 +326,8 @@ class _MachineHero extends StatelessWidget {
                 Text(
                   'X / Z —',
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: AppColors.steel,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+                    color: BlanquitaColors.of(context).steel,
+                    fontFeatures: [const FontFeature.tabularFigures()],
                   ),
                 ),
               ],
@@ -340,15 +350,19 @@ class _AxisMark extends StatelessWidget {
     duration: const Duration(milliseconds: 180),
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
-      color: (active ? AppColors.cyan : AppColors.steel).withValues(
-        alpha: 0.08,
-      ),
+      color:
+          (active
+                  ? BlanquitaColors.of(context).cyan
+                  : BlanquitaColors.of(context).steel)
+              .withValues(alpha: 0.08),
       borderRadius: BorderRadius.circular(9),
     ),
     child: Text(
       label,
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: active ? AppColors.cyan : AppColors.steel,
+        color: active
+            ? BlanquitaColors.of(context).cyan
+            : BlanquitaColors.of(context).steel,
         fontWeight: FontWeight.w600,
       ),
     ),
@@ -367,35 +381,37 @@ class _StatusMatrix extends StatelessWidget {
         label: 'ESP32',
         value: state.isConnected ? 'Conectado' : 'Sin enlace',
         icon: CupertinoIcons.antenna_radiowaves_left_right,
-        color: state.isConnected ? AppColors.mint : AppColors.danger,
+        color: state.isConnected
+            ? BlanquitaColors.of(context).mint
+            : BlanquitaColors.of(context).danger,
       ),
       _StatusCellData(
         label: 'Plato',
         value: _boolLabel(state.plateDetected, 'Detectado', 'Libre'),
         icon: CupertinoIcons.circle_grid_3x3,
         color: state.plateDetected == true
-            ? AppColors.mint
+            ? BlanquitaColors.of(context).mint
             : state.plateDetected == false
-            ? AppColors.steel
-            : AppColors.warning,
+            ? BlanquitaColors.of(context).steel
+            : BlanquitaColors.of(context).warning,
       ),
       _StatusCellData(
         label: 'Final de carrera',
         value: _boolLabel(state.finalLimitActive, 'Activado', 'Libre'),
         icon: CupertinoIcons.stop_circle,
         color: state.finalLimitActive == true
-            ? AppColors.danger
+            ? BlanquitaColors.of(context).danger
             : state.finalLimitActive == false
-            ? AppColors.mint
-            : AppColors.warning,
+            ? BlanquitaColors.of(context).mint
+            : BlanquitaColors.of(context).warning,
       ),
       _StatusCellData(
         label: 'Pinza',
         value: _gripperLabel(state.gripper),
         icon: CupertinoIcons.arrow_left_right,
         color: state.gripper == GripperState.unknown
-            ? AppColors.warning
-            : AppColors.cyan,
+            ? BlanquitaColors.of(context).warning
+            : BlanquitaColors.of(context).cyan,
       ),
     ];
     return GlassPanel(
@@ -500,7 +516,7 @@ class _StatusCell extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: Theme.of(
                     context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.42),
+                  ).colorScheme.onSurface.withValues(alpha: 0.72),
                 ),
               ),
               AnimatedSwitcher(
@@ -553,10 +569,10 @@ class _ActivityPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activeColor = state.finalLimitActive == true
-        ? AppColors.danger
+        ? BlanquitaColors.of(context).danger
         : state.sequenceActive
-        ? AppColors.cyan
-        : AppColors.mint;
+        ? BlanquitaColors.of(context).cyan
+        : BlanquitaColors.of(context).mint;
     return GlassPanel(
       padding: const EdgeInsets.fromLTRB(17, 17, 17, 15),
       child: LayoutBuilder(
@@ -579,9 +595,9 @@ class _ActivityPanel extends StatelessWidget {
                 const SizedBox(height: 9),
                 Text(
                   'Paso ${state.sequenceStep}/8 · ${state.sequenceStepLabel ?? 'En curso'}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: AppColors.cyan),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: BlanquitaColors.of(context).cyan,
+                  ),
                 ),
               ],
             ],
@@ -596,7 +612,7 @@ class _ActivityPanel extends StatelessWidget {
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(
                             context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.44),
+                          ).colorScheme.onSurface.withValues(alpha: 0.72),
                         ),
                       ),
                     ),
@@ -641,10 +657,10 @@ class _EventRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (event.level) {
-      MachineEventLevel.info => AppColors.steel,
-      MachineEventLevel.success => AppColors.mint,
-      MachineEventLevel.warning => AppColors.warning,
-      MachineEventLevel.critical => AppColors.danger,
+      MachineEventLevel.info => BlanquitaColors.of(context).steel,
+      MachineEventLevel.success => BlanquitaColors.of(context).mint,
+      MachineEventLevel.warning => BlanquitaColors.of(context).warning,
+      MachineEventLevel.critical => BlanquitaColors.of(context).danger,
     };
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -667,7 +683,7 @@ class _EventRow extends StatelessWidget {
             color: Theme.of(
               context,
             ).colorScheme.onSurface.withValues(alpha: 0.34),
-            fontFeatures: const [FontFeature.tabularFigures()],
+            fontFeatures: [const FontFeature.tabularFigures()],
           ),
         ),
       ],
@@ -690,7 +706,11 @@ class _ConnectionDetails extends StatelessWidget {
     emphasis: GlassEmphasis.quiet,
     child: Row(
       children: [
-        const Icon(CupertinoIcons.link, size: 17, color: AppColors.steel),
+        Icon(
+          CupertinoIcons.link,
+          size: 17,
+          color: BlanquitaColors.of(context).steel,
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -711,7 +731,7 @@ class _ConnectionDetails extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: Theme.of(
                     context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.38),
+                  ).colorScheme.onSurface.withValues(alpha: 0.72),
                 ),
               ),
             ],
@@ -721,8 +741,8 @@ class _ConnectionDetails extends StatelessWidget {
         Text(
           state.lastReceivedAt == null ? '—' : _time(state.lastReceivedAt!),
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
-            color: AppColors.steel,
-            fontFeatures: const [FontFeature.tabularFigures()],
+            color: BlanquitaColors.of(context).steel,
+            fontFeatures: [const FontFeature.tabularFigures()],
           ),
         ),
       ],
@@ -731,4 +751,163 @@ class _ConnectionDetails extends StatelessWidget {
 
   String _time(DateTime value) =>
       '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}:${value.second.toString().padLeft(2, '0')}';
+}
+
+class _HamburgerDashboard extends StatelessWidget {
+  const _HamburgerDashboard({required this.machine});
+  final MachineController machine;
+  @override
+  Widget build(BuildContext context) {
+    final state = machine.state;
+    final visionController = context.watch<VisionController>();
+    final vision = visionController.state;
+    final preferences = context.watch<SettingsController>().settings;
+    final summary = AlfresiRules.explain(
+      AlfresiContext.read(machine, visionController, 'Inicio'),
+    );
+    final summaryColor =
+        state.finalLimitActive == true || state.connectionError != null
+        ? BlanquitaColors.of(context).danger
+        : state.isConnected && vision.ready && state.finalLimitActive == false
+        ? BlanquitaColors.of(context).mint
+        : BlanquitaColors.of(context).warning;
+    return SafeArea(
+      bottom: false,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 22, 20, 126),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                PageHeader(
+                  eyebrow: 'ROBÓTICA INDUSTRIAL · CONTROL LOCAL',
+                  title: 'BLANQUITA',
+                  subtitle: 'Precisión en cada movimiento.',
+                  trailing: ConnectionBadge(phase: state.connection),
+                ),
+                const SizedBox(height: 22),
+                if (state.finalLimitActive == true) ...[
+                  SafetyBanner(
+                    icon: Icons.warning_amber,
+                    title: 'Final de carrera activo',
+                    message: 'Movimiento bloqueado por seguridad.',
+                    color: BlanquitaColors.of(context).danger,
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                BlanquitaCard(
+                  borderColor: summaryColor.withValues(alpha: .7),
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        'Estado general',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            state.finalLimitActive == true
+                                ? Icons.lock
+                                : state.isConnected
+                                ? Icons.precision_manufacturing
+                                : Icons.link_off,
+                            color: summaryColor,
+                            size: 28,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              summary.title,
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(color: summaryColor),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _MachineHero(state: state),
+                if (preferences.assistantEnabled &&
+                    preferences.assistantTips) ...[
+                  const SizedBox(height: 16),
+                  AlfresiBubble(message: summary.body, mood: summary.mood),
+                ],
+                const SizedBox(height: 24),
+                BlanquitaSection(
+                  title: 'Conexiones',
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final cards = [
+                        BlanquitaDeviceCard(
+                          name: 'ESP32',
+                          status: machine.connectionStatusLabel,
+                          ready: machine.protocolReady,
+                          icon: Icons.memory,
+                        ),
+                        BlanquitaDeviceCard(
+                          name: 'Visión · laptop',
+                          status: visionConnectionLabel(vision),
+                          ready: vision.ready,
+                          icon: Icons.center_focus_strong,
+                        ),
+                      ];
+                      if (constraints.maxWidth < 340 ||
+                          MediaQuery.textScalerOf(context).scale(14) > 22) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            cards[0],
+                            const SizedBox(height: 12),
+                            cards[1],
+                          ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: cards[0]),
+                          const SizedBox(width: 12),
+                          Expanded(child: cards[1]),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 24),
+                BlanquitaSection(
+                  title: 'Robot y sensores',
+                  child: _StatusMatrix(state: state),
+                ),
+                const SizedBox(height: 24),
+                BlanquitaSection(
+                  title: 'Actividad reciente',
+                  child: _ActivityPanel(
+                    state: state,
+                    events: machine.events.take(4).toList(),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                const WifiNetworkPanel(),
+                const SizedBox(height: 16),
+                _ConnectionDetails(
+                  state: state,
+                  websocketUrl:
+                      machine.connectionWebsocketUrl ??
+                      'Sin dirección guardada',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -42,11 +42,11 @@ class _MotionRevealState extends State<MotionReveal> {
         MediaQuery.disableAnimationsOf(context);
     return AnimatedOpacity(
       opacity: _visible || reduce ? 1 : 0,
-      duration: reduce ? Duration.zero : const Duration(milliseconds: 520),
+      duration: reduce ? Duration.zero : const Duration(milliseconds: 190),
       curve: Curves.easeOutCubic,
       child: AnimatedSlide(
         offset: _visible || reduce ? Offset.zero : widget.offset,
-        duration: reduce ? Duration.zero : const Duration(milliseconds: 620),
+        duration: reduce ? Duration.zero : const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         child: widget.child,
       ),

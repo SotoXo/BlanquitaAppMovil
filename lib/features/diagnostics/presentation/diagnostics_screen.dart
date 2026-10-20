@@ -1,9 +1,10 @@
+import '../../../shared/widgets/blanquita/blanquita_components.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app/theme/app_theme.dart';
+import '../../../app/design/blanquita_design.dart';
 import '../../../core/diagnostics/connection_log.dart';
 import '../../../core/models/machine_state.dart';
 import '../../../core/network/connection_failure.dart';
@@ -16,8 +17,14 @@ import '../../../shared/widgets/wifi_network_panel.dart';
 import '../../vision/controller/vision_controller.dart';
 import '../../vision/presentation/vision_widgets.dart';
 
-class DiagnosticsScreen extends StatelessWidget {
+class DiagnosticsScreen extends StatefulWidget {
   const DiagnosticsScreen({super.key});
+  @override
+  State<DiagnosticsScreen> createState() => _DiagnosticsScreenState();
+}
+
+class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
+  int _view = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -76,137 +83,158 @@ class DiagnosticsScreen extends StatelessWidget {
                   children: [
                     const PageHeader(
                       eyebrow: 'Telemetría local',
-                      title: 'Conexiones',
+                      title: 'Diagnósticos',
                       subtitle:
                           'Control ESP32 y visión de la laptop tienen sesiones independientes. Red esperada: CARTESIANO o una LAN común.',
                     ),
                     const SizedBox(height: 20),
-                    const WifiNetworkPanel(),
-                    const SizedBox(height: 14),
-                    _ResponsivePair(
-                      first: _ConnectionCard(
-                        title: 'ESP32 · CONTROL',
-                        icon: CupertinoIcons.antenna_radiowaves_left_right,
-                        rows: control,
-                        error: state.connectionError,
-                        technical: machine.lastTechnicalError,
-                        hint: _errorHint(machine.lastErrorCode, control: true),
-                        probing: wifi.probing,
-                        probe:
-                            wifi.status.connected &&
-                                !wifi.probing &&
-                                controlEndpoint != null
-                            ? () => _probeWifiPort(
-                                context,
-                                wifi,
-                                controlEndpoint,
-                                'el ESP32',
-                              )
-                            : null,
-                      ),
-                      second: _ConnectionCard(
-                        title: 'Laptop · VISIÓN',
-                        icon: CupertinoIcons.eye,
-                        rows: visionRows,
-                        error: vs.error,
-                        technical: vision.lastTechnicalError,
-                        hint: _errorHint(vision.lastErrorCode, control: false),
-                        probing: wifi.probing,
-                        probe:
-                            wifi.status.connected &&
-                                !wifi.probing &&
-                                visionEndpoint != null
-                            ? () => _probeWifiPort(
-                                context,
-                                wifi,
-                                visionEndpoint,
-                                'la laptop',
-                              )
-                            : null,
-                      ),
+                    BlanquitaSegmentedControl<int>(
+                      value: _view,
+                      options: const {0: 'Conexiones', 1: 'Sistema', 2: 'Logs'},
+                      onChanged: (value) => setState(() => _view = value),
                     ),
-                    const SizedBox(height: 14),
-                    _ConnectionGuidance(machine: machine, vision: vision),
-                    const SizedBox(height: 14),
-                    _ConnectionJournal(
-                      control: control,
-                      vision: visionRows,
-                      wifi: wifi.snapshot,
-                    ),
+                    const SizedBox(height: 16),
+                    if (_view == 0) ...[
+                      const WifiNetworkPanel(),
+                      const SizedBox(height: 14),
+                      _ResponsivePair(
+                        first: _ConnectionCard(
+                          title: 'ESP32 · CONTROL',
+                          icon: CupertinoIcons.antenna_radiowaves_left_right,
+                          rows: control,
+                          error: state.connectionError,
+                          technical: machine.lastTechnicalError,
+                          hint: _errorHint(
+                            machine.lastErrorCode,
+                            control: true,
+                          ),
+                          probing: wifi.probing,
+                          probe:
+                              wifi.status.connected &&
+                                  !wifi.probing &&
+                                  controlEndpoint != null
+                              ? () => _probeWifiPort(
+                                  context,
+                                  wifi,
+                                  controlEndpoint,
+                                  'el ESP32',
+                                )
+                              : null,
+                        ),
+                        second: _ConnectionCard(
+                          title: 'Laptop · VISIÓN',
+                          icon: CupertinoIcons.eye,
+                          rows: visionRows,
+                          error: vs.error,
+                          technical: vision.lastTechnicalError,
+                          hint: _errorHint(
+                            vision.lastErrorCode,
+                            control: false,
+                          ),
+                          probing: wifi.probing,
+                          probe:
+                              wifi.status.connected &&
+                                  !wifi.probing &&
+                                  visionEndpoint != null
+                              ? () => _probeWifiPort(
+                                  context,
+                                  wifi,
+                                  visionEndpoint,
+                                  'la laptop',
+                                )
+                              : null,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _ConnectionGuidance(machine: machine, vision: vision),
+                      const SizedBox(height: 14),
+                    ],
+                    if (_view == 2)
+                      _ConnectionJournal(
+                        control: control,
+                        vision: visionRows,
+                        wifi: wifi.snapshot,
+                      ),
                     const SizedBox(height: 24),
-                    const SectionLabel('Telemetría del ESP32'),
-                    const SizedBox(height: 10),
-                    _ResponsivePair(
-                      first: VisionReadouts(
-                        title: 'Sensores',
-                        rows: {
-                          'Plato': _boolLabel(
-                            state.plateDetected,
-                            'Detectado',
-                            'Libre',
-                          ),
-                          'Final de carrera': _boolLabel(
-                            state.finalLimitActive,
-                            'Activado',
-                            'Libre',
-                          ),
-                          'Último paquete': state.lastSensorPacket ?? '—',
-                        },
-                      ),
-                      second: VisionReadouts(
-                        title: 'Máquina',
-                        rows: {
-                          'Movimiento':
-                              state.activeMovement?.label ?? 'Detenido',
-                          'Secuencia': state.sequence.name,
-                          'Paso': state.sequenceStep?.toString() ?? '—',
-                          'Pinza': state.gripper.name,
-                          'Estado': state.lastStatus,
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    VisionReadouts(
-                      title: 'Telemetría de visión',
-                      rows: {
-                        'Último heartbeat': _reception(vs.lastHeartbeat),
-                        'Último reporte': visionTime(vs.lastReport?.timestamp),
-                        'ID reporte': vs.lastReport?.id ?? '—',
-                        'Edad reporte': visionAge(vs.reportAge),
-                        'Heartbeat vencido': vs.stale ? 'Sí' : 'No',
-                        'Reporte caducado': vs.reportStale ? 'Sí' : 'No',
-                        'Latencia': vs.latency == null
-                            ? '—'
-                            : '${vs.latency!.toStringAsFixed(1)} ms',
-                        'Cámara': visionStatusLabel(vs.cameraStatus),
-                        'Nombre cámara': vs.cameraName ?? '—',
-                        'Detector': visionStatusLabel(vs.detectorStatus),
-                        'Calibración': visionStatusLabel(vs.calibrationStatus),
-                      },
-                    ),
-                    const SizedBox(height: 14),
-                    GlassPanel(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Eventos de máquina',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                          const SizedBox(height: 12),
-                          if (machine.events.isEmpty)
-                            const Text('Sin eventos registrados'),
-                          for (final event in machine.events.take(20))
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Text(
-                                '${visionTime(event.timestamp)} · ${event.level.name.toUpperCase()} · ${event.message}',
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
+                    if (_view == 1) ...[
+                      const SectionLabel('Telemetría del ESP32'),
+                      const SizedBox(height: 10),
+                      _ResponsivePair(
+                        first: VisionReadouts(
+                          title: 'Sensores',
+                          rows: {
+                            'Plato': _boolLabel(
+                              state.plateDetected,
+                              'Detectado',
+                              'Libre',
                             ),
-                        ],
+                            'Final de carrera': _boolLabel(
+                              state.finalLimitActive,
+                              'Activado',
+                              'Libre',
+                            ),
+                            'Último paquete': state.lastSensorPacket ?? '—',
+                          },
+                        ),
+                        second: VisionReadouts(
+                          title: 'Máquina',
+                          rows: {
+                            'Movimiento':
+                                state.activeMovement?.label ?? 'Detenido',
+                            'Secuencia': state.sequence.name,
+                            'Paso': state.sequenceStep?.toString() ?? '—',
+                            'Pinza': state.gripper.name,
+                            'Estado': state.lastStatus,
+                          },
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 14),
+                      VisionReadouts(
+                        title: 'Telemetría de visión',
+                        rows: {
+                          'Último heartbeat': _reception(vs.lastHeartbeat),
+                          'Último reporte': visionTime(
+                            vs.lastReport?.timestamp,
+                          ),
+                          'ID reporte': vs.lastReport?.id ?? '—',
+                          'Edad reporte': visionAge(vs.reportAge),
+                          'Heartbeat vencido': vs.stale ? 'Sí' : 'No',
+                          'Reporte caducado': vs.reportStale ? 'Sí' : 'No',
+                          'Latencia': vs.latency == null
+                              ? '—'
+                              : '${vs.latency!.toStringAsFixed(1)} ms',
+                          'Cámara': visionStatusLabel(vs.cameraStatus),
+                          'Nombre cámara': vs.cameraName ?? '—',
+                          'Detector': visionStatusLabel(vs.detectorStatus),
+                          'Calibración': visionStatusLabel(
+                            vs.calibrationStatus,
+                          ),
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      GlassPanel(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Eventos de máquina',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 12),
+                            if (machine.events.isEmpty)
+                              const Text('Sin eventos registrados'),
+                            for (final event in machine.events.take(20))
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  '${visionTime(event.timestamp)} · ${event.level.name.toUpperCase()} · ${event.message}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -266,7 +294,7 @@ class _ConnectionCard extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, color: AppColors.cyan),
+            Icon(icon, color: BlanquitaColors.of(context).cyan),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -287,9 +315,9 @@ class _ConnectionCard extends StatelessWidget {
               children: [
                 Text(
                   entry.key,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelSmall?.copyWith(color: AppColors.steel),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: BlanquitaColors.of(context).steel,
+                  ),
                 ),
                 const SizedBox(height: 3),
                 Text(
@@ -302,9 +330,9 @@ class _ConnectionCard extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           'Último error',
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: AppColors.steel),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: BlanquitaColors.of(context).steel,
+          ),
         ),
         const SizedBox(height: 4),
         Semantics(
@@ -312,7 +340,9 @@ class _ConnectionCard extends StatelessWidget {
           child: Text(
             error ?? 'Sin error registrado',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: error == null ? AppColors.steel : AppColors.warning,
+              color: error == null
+                  ? BlanquitaColors.of(context).steel
+                  : BlanquitaColors.of(context).warning,
             ),
           ),
         ),
@@ -338,9 +368,9 @@ class _ConnectionCard extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           'Prueba TCP del host y puerto configurados por Wi-Fi. No valida WebSocket ni READY y no envía comandos físicos. El resultado se registra en la bitácora.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: BlanquitaColors.of(context).steel,
+          ),
         ),
       ],
     ),
@@ -405,9 +435,9 @@ class _ConnectionGuidance extends StatelessWidget {
             ),
           Text(
             'La app no lee el SSID. Un timeout por sí solo no identifica una IP incorrecta, un equipo apagado o aislamiento de clientes.',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: BlanquitaColors.of(context).steel,
+            ),
           ),
         ],
       ),
@@ -441,9 +471,9 @@ class _ConnectionJournal extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               '${log.entries.length} eventos en memoria. Copia el estado y los eventos para compartir el diagnóstico.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AppColors.steel),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: BlanquitaColors.of(context).steel,
+              ),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -525,11 +555,11 @@ class _ConnectionLogLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (entry.level) {
-      ConnectionLogLevel.info => AppColors.cyan,
-      ConnectionLogLevel.success => AppColors.mint,
-      ConnectionLogLevel.warning => AppColors.warning,
+      ConnectionLogLevel.info => BlanquitaColors.of(context).cyan,
+      ConnectionLogLevel.success => BlanquitaColors.of(context).mint,
+      ConnectionLogLevel.warning => BlanquitaColors.of(context).warning,
       ConnectionLogLevel.error ||
-      ConnectionLogLevel.critical => AppColors.danger,
+      ConnectionLogLevel.critical => BlanquitaColors.of(context).danger,
     };
     final technical = [
       if (entry.errorCode != null) 'ERROR_CODE=${entry.errorCode}',
@@ -542,14 +572,16 @@ class _ConnectionLogLine extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(color: AppColors.steel.withValues(alpha: 0.15)),
+          bottom: BorderSide(
+            color: BlanquitaColors.of(context).steel.withValues(alpha: 0.15),
+          ),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '${visionTime(entry.timestamp)}  ${entry.channel.name.toUpperCase()}  ${entry.level.name.toUpperCase()}',
+            '● ${visionTime(entry.timestamp)}  ${entry.channel.name.toUpperCase()}  ${entry.level.name.toUpperCase()}',
             style: Theme.of(
               context,
             ).textTheme.labelSmall?.copyWith(color: color),
@@ -578,7 +610,7 @@ class _TechnicalDetails extends StatelessWidget {
       'Detalles técnicos',
       style: Theme.of(
         context,
-      ).textTheme.bodySmall?.copyWith(color: AppColors.cyan),
+      ).textTheme.bodySmall?.copyWith(color: BlanquitaColors.of(context).cyan),
     ),
     children: [
       Align(
@@ -664,7 +696,7 @@ String _boolLabel(bool? value, String yes, String no) => value == null
     ? yes
     : no;
 
-bool _isNetworkFailure(String? code) => const {
+bool _isNetworkFailure(String? code) => {
   'CONNECT_TIMEOUT',
   'HOST_UNREACHABLE',
   'CONNECTION_REFUSED',

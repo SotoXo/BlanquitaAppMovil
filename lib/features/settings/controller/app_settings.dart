@@ -1,9 +1,28 @@
 import 'package:flutter/material.dart';
 
+enum BlanquitaVisualTheme { original, hamburger, custom }
+
+enum BlanquitaFont { outfit, system }
+
+enum BlanquitaTextSize { small, normal, large }
+
+enum BlanquitaDensity { compact, normal, large }
+
 enum GlassIntensity { low, medium, high }
 
 class AppSettings {
   const AppSettings({
+    this.visualTheme = BlanquitaVisualTheme.hamburger,
+    this.font = BlanquitaFont.outfit,
+    this.textSize = BlanquitaTextSize.normal,
+    this.density = BlanquitaDensity.normal,
+    this.customAccent = 0xFFFFC928,
+    this.shadowsEnabled = true,
+    this.assistantEnabled = true,
+    this.assistantTips = true,
+    this.assistantAlerts = true,
+    this.assistantTechnical = true,
+    this.assistantAnimations = true,
     this.websocketUrl = '',
     this.autoReconnect = true,
     this.hapticsEnabled = true,
@@ -23,6 +42,17 @@ class AppSettings {
     this.visionMinimumConfidence = 0.8,
   });
 
+  final BlanquitaVisualTheme visualTheme;
+  final BlanquitaFont font;
+  final BlanquitaTextSize textSize;
+  final BlanquitaDensity density;
+  final int customAccent;
+  final bool shadowsEnabled;
+  final bool assistantEnabled;
+  final bool assistantTips;
+  final bool assistantAlerts;
+  final bool assistantTechnical;
+  final bool assistantAnimations;
   final String websocketUrl;
   final bool autoReconnect;
   final bool hapticsEnabled;
@@ -42,6 +72,17 @@ class AppSettings {
   final double visionMinimumConfidence;
 
   AppSettings copyWith({
+    BlanquitaVisualTheme? visualTheme,
+    BlanquitaFont? font,
+    BlanquitaTextSize? textSize,
+    BlanquitaDensity? density,
+    int? customAccent,
+    bool? shadowsEnabled,
+    bool? assistantEnabled,
+    bool? assistantTips,
+    bool? assistantAlerts,
+    bool? assistantTechnical,
+    bool? assistantAnimations,
     String? websocketUrl,
     bool? autoReconnect,
     bool? hapticsEnabled,
@@ -61,6 +102,17 @@ class AppSettings {
     double? visionMinimumConfidence,
   }) {
     return AppSettings(
+      visualTheme: visualTheme ?? this.visualTheme,
+      font: font ?? this.font,
+      textSize: textSize ?? this.textSize,
+      density: density ?? this.density,
+      customAccent: customAccent ?? this.customAccent,
+      shadowsEnabled: shadowsEnabled ?? this.shadowsEnabled,
+      assistantEnabled: assistantEnabled ?? this.assistantEnabled,
+      assistantTips: assistantTips ?? this.assistantTips,
+      assistantAlerts: assistantAlerts ?? this.assistantAlerts,
+      assistantTechnical: assistantTechnical ?? this.assistantTechnical,
+      assistantAnimations: assistantAnimations ?? this.assistantAnimations,
       websocketUrl: websocketUrl ?? this.websocketUrl,
       autoReconnect: autoReconnect ?? this.autoReconnect,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,

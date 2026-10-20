@@ -1,6 +1,8 @@
+import 'package:provider/provider.dart';
+import '../../features/settings/controller/settings_controller.dart';
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_theme.dart';
+import '../../app/design/blanquita_design.dart';
 import '../../core/models/machine_state.dart';
 import 'glass_surface.dart';
 
@@ -17,13 +19,17 @@ class StatusDot extends StatelessWidget {
     decoration: BoxDecoration(
       color: color,
       shape: BoxShape.circle,
-      boxShadow: [
-        BoxShadow(
-          color: color.withValues(alpha: 0.48),
-          blurRadius: 10,
-          spreadRadius: 1,
-        ),
-      ],
+      boxShadow:
+          context.watch<SettingsController>().settings.shadowsEnabled &&
+              !context.watch<SettingsController>().settings.performanceMode
+          ? [
+              BoxShadow(
+                color: color.withValues(alpha: 0.48),
+                blurRadius: 10,
+                spreadRadius: 1,
+              ),
+            ]
+          : null,
     ),
   );
 }
@@ -36,10 +42,16 @@ class ConnectionBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (phase) {
-      ConnectionPhase.connected => ('Online', AppColors.mint),
-      ConnectionPhase.connecting => ('Conectando', AppColors.warning),
-      ConnectionPhase.error => ('Error', AppColors.danger),
-      ConnectionPhase.disconnected => ('Offline', AppColors.danger),
+      ConnectionPhase.connected => ('Online', BlanquitaColors.of(context).mint),
+      ConnectionPhase.connecting => (
+        'Conectando',
+        BlanquitaColors.of(context).warning,
+      ),
+      ConnectionPhase.error => ('Error', BlanquitaColors.of(context).danger),
+      ConnectionPhase.disconnected => (
+        'Offline',
+        BlanquitaColors.of(context).danger,
+      ),
     };
     return GlassChip(
       color: color,

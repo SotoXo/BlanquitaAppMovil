@@ -1,0 +1,12 @@
+Formatted lib\app\design\blanquita_design.dart
+Formatted lib\app\navigation\glass_navigation_bar.dart
+Formatted lib\features\assistant\presentation\alfresi_avatar.dart
+Formatted lib\features\assistant\presentation\alfresi_bubble.dart
+Formatted lib\features\control\presentation\control_screen.dart
+Formatted lib\features\dashboard\presentation\dashboard_screen.dart
+Formatted lib\features\settings\presentation\settings_screen.dart
+Formatted lib\features\vision\presentation\vision_screen.dart
+Formatted lib\shared\widgets\page_header.dart
+Formatted test\frontend_evidence_test.dart
+Formatted test\visual_preferences_test.dart
+Formatted 71 files (11 changed) in 1.44 seconds.

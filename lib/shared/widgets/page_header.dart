@@ -1,3 +1,8 @@
+import 'package:provider/provider.dart';
+import '../../features/settings/controller/settings_controller.dart';
+import '../../features/settings/controller/app_settings.dart';
+import 'blanquita/blanquita_brand.dart';
+import '../../features/assistant/presentation/alfresi_panel.dart';
 import 'package:flutter/material.dart';
 
 class PageHeader extends StatelessWidget {
@@ -29,13 +34,26 @@ class PageHeader extends StatelessWidget {
           ),
         ),
         SizedBox(height: compact ? 5 : 8),
-        Text(
-          title,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: compact
-              ? Theme.of(context).textTheme.headlineSmall
-              : Theme.of(context).textTheme.headlineMedium,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title == 'BLANQUITA' &&
+                context.watch<SettingsController>().settings.visualTheme !=
+                    BlanquitaVisualTheme.original) ...[
+              const BlanquitaBrand(),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: compact
+                    ? Theme.of(context).textTheme.headlineSmall
+                    : Theme.of(context).textTheme.headlineMedium,
+              ),
+            ),
+          ],
         ),
         SizedBox(height: compact ? 4 : 7),
         ConstrainedBox(
@@ -45,21 +63,65 @@ class PageHeader extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(
                 context,
-              ).colorScheme.onSurface.withValues(alpha: 0.56),
+              ).colorScheme.onSurface.withValues(alpha: 0.72),
             ),
           ),
         ),
       ],
     );
 
-    if (trailing == null) return content;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final accessories = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Expanded(child: content),
-        const SizedBox(width: 12),
-        trailing!,
+        ?trailing,
+        AlfresiButton(
+          section: title == 'BLANQUITA'
+              ? 'Inicio'
+              : (title == 'Visor inteligente' || title == 'Visión · laptop')
+              ? 'Visión'
+              : title,
+        ),
       ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 520 ||
+            MediaQuery.textScalerOf(context).scale(14) > 22) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: content),
+                  if (trailing == null)
+                    AlfresiButton(
+                      section:
+                          (title == 'Visor inteligente' ||
+                              title == 'Visión · laptop')
+                          ? 'Visión'
+                          : title,
+                    ),
+                ],
+              ),
+              if (trailing != null) ...[
+                const SizedBox(height: 12),
+                accessories,
+              ],
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: content),
+            const SizedBox(width: 12),
+            accessories,
+          ],
+        );
+      },
     );
   }
 }
@@ -73,15 +135,17 @@ class SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      Text(
-        label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: Theme.of(
-            context,
-          ).colorScheme.onSurface.withValues(alpha: 0.64),
+      Expanded(
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.72),
+          ),
         ),
       ),
-      if (trailing != null) ...[const Spacer(), trailing!],
+      ?trailing,
     ],
   );
 }

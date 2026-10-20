@@ -2,7 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app/theme/app_theme.dart';
+import '../../../app/design/blanquita_design.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../../../features/diagnostics/presentation/diagnostics_screen.dart';
 import '../../../shared/widgets/glass_surface.dart';
@@ -14,6 +14,9 @@ import '../controller/settings_controller.dart';
 import '../../vision/controller/vision_controller.dart';
 import '../../vision/presentation/vision_widgets.dart';
 import 'endpoint_dialog.dart';
+import 'personalization_panel.dart';
+import '../../../shared/widgets/blanquita/blanquita_timeline.dart';
+import '../../../shared/widgets/blanquita/blanquita_connection_feedback.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -49,10 +52,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: PageHeader(
                     eyebrow: 'Preferencias',
                     title: 'Ajustes',
-                    subtitle:
-                        'Configura la experiencia sin alterar el protocolo de la máquina.',
+                    subtitle: 'Haz BLANQUITA a tu medida.',
                   ),
                 ),
+                const SizedBox(height: 18),
+                const PersonalizationPanel(),
                 const SizedBox(height: 18),
                 const WifiNetworkPanel(),
                 const SizedBox(height: 18),
@@ -70,7 +74,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: Theme.of(
                       context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.54),
+                    ).colorScheme.onSurface.withValues(alpha: 0.72),
                   ),
                 ),
                 const SizedBox(height: 9),
@@ -120,7 +124,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => _toggle(1),
                   children: [
                     _ChoiceRow<ThemeMode>(
-                      title: 'Tema',
+                      title: 'Modo de brillo',
                       value: settings.themeMode,
                       options: const {
                         ThemeMode.dark: 'Oscuro',
@@ -130,7 +134,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       onChanged: controller.setThemeMode,
                     ),
                     _ToggleRow(
-                      title: 'Liquid Glass',
+                      title: 'Glass del tema Original',
                       subtitle: 'Material translúcido, biseles y reflejos.',
                       value: settings.glassEnabled,
                       onChanged: settings.performanceMode
@@ -162,7 +166,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       subtitle: 'Reduce el coste gráfico de las superficies.',
                       value: settings.performanceMode,
                       onChanged: controller.setPerformanceMode,
-                      accent: AppColors.mint,
+                      accent: BlanquitaColors.of(context).mint,
                     ),
                   ],
                 ),
@@ -285,7 +289,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       Text(
                         vision.state.error!,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.warning,
+                          color: BlanquitaColors.of(context).warning,
                         ),
                       ),
                   ],
@@ -303,13 +307,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Icon(CupertinoIcons.waveform_path_ecg),
                       SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          'Abrir diagnósticos',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
+                      Flexible(child: Text('Abrir diagnósticos')),
                       SizedBox(width: 10),
                       _NestedArrow(),
                     ],
@@ -364,16 +362,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _testVisionConnection(VisionController vision) async {
-    final ready = await vision.testConnection();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          ready
-              ? 'Vision Server respondió READY.'
-              : vision.state.error ?? 'La laptop no confirmó READY.',
-        ),
-      ),
+    await showConnectionFeedback(
+      context,
+      device: 'Visión',
+      check: vision.testConnection,
+      cancel: vision.disconnect,
+      error: () => vision.state.error,
     );
   }
 }
@@ -392,7 +386,9 @@ class _ConnectionPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final connected = machine.protocolReady;
-    final color = connected ? AppColors.mint : AppColors.warning;
+    final color = connected
+        ? BlanquitaColors.of(context).mint
+        : BlanquitaColors.of(context).warning;
     return GlassPanel(
       emphasis: GlassEmphasis.prominent,
       padding: const EdgeInsets.fromLTRB(16, 16, 13, 15),
@@ -443,6 +439,12 @@ class _ConnectionPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+          BlanquitaTimeline(
+            transportOpen: machine.transportOpen,
+            ready: machine.protocolReady,
+            connecting: machine.isConnecting,
+            phase: machine.phase,
+          ),
           Text(
             'Red esperada: ${MachineController.wifiName}',
             style: Theme.of(context).textTheme.bodySmall,
@@ -466,10 +468,10 @@ class _ConnectionPanel extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     CupertinoIcons.link,
                     size: 16,
-                    color: AppColors.steel,
+                    color: BlanquitaColors.of(context).steel,
                   ),
                   const SizedBox(width: 9),
                   Expanded(
@@ -481,10 +483,10 @@ class _ConnectionPanel extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Icon(
+                  Icon(
                     CupertinoIcons.pencil,
                     size: 15,
-                    color: AppColors.steel,
+                    color: BlanquitaColors.of(context).steel,
                   ),
                 ],
               ),
@@ -503,20 +505,13 @@ class _ConnectionPanel extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed: machine.isConnecting
                     ? null
-                    : () async {
-                        final ready = await machine.testConnection();
-                        if (!context.mounted) return;
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              ready
-                                  ? 'ESP32 respondió READY. Prueba sin movimiento.'
-                                  : machine.state.connectionError ??
-                                        'El ESP32 no confirmó READY.',
-                            ),
-                          ),
-                        );
-                      },
+                    : () => showConnectionFeedback(
+                        context,
+                        device: 'ESP32',
+                        check: machine.testConnection,
+                        cancel: machine.disconnect,
+                        error: () => machine.state.connectionError,
+                      ),
                 icon: const Icon(CupertinoIcons.checkmark_shield, size: 17),
                 label: const Text('Probar conexión ESP32'),
               ),
@@ -551,7 +546,7 @@ class _ConnectionPanel extends StatelessWidget {
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
               color: Theme.of(
                 context,
-              ).colorScheme.onSurface.withValues(alpha: 0.38),
+              ).colorScheme.onSurface.withValues(alpha: 0.72),
             ),
           ),
         ],
@@ -595,10 +590,16 @@ class _SettingsDisclosure extends StatelessWidget {
                   width: 37,
                   height: 37,
                   decoration: BoxDecoration(
-                    color: AppColors.cyan.withValues(alpha: 0.075),
+                    color: BlanquitaColors.of(
+                      context,
+                    ).cyan.withValues(alpha: 0.075),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(icon, size: 18, color: AppColors.cyan),
+                  child: Icon(
+                    icon,
+                    size: 18,
+                    color: BlanquitaColors.of(context).cyan,
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -617,7 +618,7 @@ class _SettingsDisclosure extends StatelessWidget {
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
                           color: Theme.of(
                             context,
-                          ).colorScheme.onSurface.withValues(alpha: 0.40),
+                          ).colorScheme.onSurface.withValues(alpha: 0.72),
                         ),
                       ),
                     ],
@@ -690,7 +691,7 @@ class _ToggleRow extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                   color: Theme.of(
                     context,
-                  ).colorScheme.onSurface.withValues(alpha: 0.40),
+                  ).colorScheme.onSurface.withValues(alpha: 0.72),
                 ),
               ),
             ],
@@ -738,7 +739,7 @@ class _SliderRow extends StatelessWidget {
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
             color: Theme.of(
               context,
-            ).colorScheme.onSurface.withValues(alpha: 0.40),
+            ).colorScheme.onSurface.withValues(alpha: 0.72),
           ),
         ),
         Slider(value: value, onChanged: onChanged),
@@ -816,7 +817,7 @@ class _ActionRow extends StatelessWidget {
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: Theme.of(
                       context,
-                    ).colorScheme.onSurface.withValues(alpha: 0.40),
+                    ).colorScheme.onSurface.withValues(alpha: 0.72),
                   ),
                 ),
               ],
@@ -838,12 +839,12 @@ class _NestedArrow extends StatelessWidget {
     height: 27,
     decoration: BoxDecoration(
       shape: BoxShape.circle,
-      color: AppColors.cyan.withValues(alpha: 0.12),
+      color: BlanquitaColors.of(context).cyan.withValues(alpha: 0.12),
     ),
-    child: const Icon(
+    child: Icon(
       CupertinoIcons.arrow_up_right,
       size: 13,
-      color: AppColors.cyan,
+      color: BlanquitaColors.of(context).cyan,
     ),
   );
 }

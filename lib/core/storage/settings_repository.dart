@@ -10,6 +10,34 @@ class SettingsRepository {
 
   AppSettings load() {
     return AppSettings(
+      visualTheme: _enumByName(
+        BlanquitaVisualTheme.values,
+        _preferences.getString('ui.visualTheme'),
+        BlanquitaVisualTheme.hamburger,
+      ),
+      font: _enumByName(
+        BlanquitaFont.values,
+        _preferences.getString('ui.font'),
+        BlanquitaFont.outfit,
+      ),
+      textSize: _enumByName(
+        BlanquitaTextSize.values,
+        _preferences.getString('ui.textSize'),
+        BlanquitaTextSize.normal,
+      ),
+      density: _enumByName(
+        BlanquitaDensity.values,
+        _preferences.getString('ui.density'),
+        BlanquitaDensity.normal,
+      ),
+      customAccent: _preferences.getInt('ui.customAccent') ?? 0xFFFFC928,
+      shadowsEnabled: _preferences.getBool('ui.shadowsEnabled') ?? true,
+      assistantEnabled: _preferences.getBool('ui.assistantEnabled') ?? true,
+      assistantTips: _preferences.getBool('ui.assistantTips') ?? true,
+      assistantAlerts: _preferences.getBool('ui.assistantAlerts') ?? true,
+      assistantTechnical: _preferences.getBool('ui.assistantTechnical') ?? true,
+      assistantAnimations:
+          _preferences.getBool('ui.assistantAnimations') ?? true,
       websocketUrl: _preferences.getString(_Keys.websocketUrl) ?? '',
       autoReconnect: _preferences.getBool(_Keys.autoReconnect) ?? true,
       hapticsEnabled: _preferences.getBool(_Keys.hapticsEnabled) ?? true,
@@ -55,6 +83,23 @@ class SettingsRepository {
 
   Future<void> save(AppSettings settings) async {
     await Future.wait([
+      _preferences.setBool(
+        'ui.assistantAnimations',
+        settings.assistantAnimations,
+      ),
+      _preferences.setBool(
+        'ui.assistantTechnical',
+        settings.assistantTechnical,
+      ),
+      _preferences.setBool('ui.assistantAlerts', settings.assistantAlerts),
+      _preferences.setBool('ui.assistantTips', settings.assistantTips),
+      _preferences.setBool('ui.assistantEnabled', settings.assistantEnabled),
+      _preferences.setBool('ui.shadowsEnabled', settings.shadowsEnabled),
+      _preferences.setInt('ui.customAccent', settings.customAccent),
+      _preferences.setString('ui.density', settings.density.name),
+      _preferences.setString('ui.textSize', settings.textSize.name),
+      _preferences.setString('ui.font', settings.font.name),
+      _preferences.setString('ui.visualTheme', settings.visualTheme.name),
       _preferences.setString(_Keys.websocketUrl, settings.websocketUrl),
       _preferences.setBool(_Keys.autoReconnect, settings.autoReconnect),
       _preferences.setBool(_Keys.hapticsEnabled, settings.hapticsEnabled),

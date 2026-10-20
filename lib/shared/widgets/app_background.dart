@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../app/theme/app_theme.dart';
+import '../../app/design/blanquita_design.dart';
 
 class AppBackground extends StatelessWidget {
   const AppBackground({super.key, required this.child});
@@ -9,16 +9,15 @@ class AppBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = BlanquitaColors.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: isDark ? AppColors.canvas : const Color(0xFFEAF1F3),
+        color: colors.canvas,
         gradient: RadialGradient(
           center: const Alignment(0.72, -0.78),
           radius: 1.15,
-          colors: isDark
-              ? const [Color(0xFF10252D), AppColors.canvas]
-              : const [Color(0xFFF9FCFC), Color(0xFFE5EEF0)],
+          colors: [colors.graphiteRaised, colors.canvas],
           stops: const [0, 0.72],
         ),
       ),
@@ -27,7 +26,10 @@ class AppBackground extends StatelessWidget {
         children: [
           RepaintBoundary(
             child: CustomPaint(
-              painter: _IndustrialBackdropPainter(isDark: isDark),
+              painter: _IndustrialBackdropPainter(
+                isDark: isDark,
+                colors: colors,
+              ),
             ),
           ),
           Positioned(
@@ -35,7 +37,7 @@ class AppBackground extends StatelessWidget {
             right: -120,
             child: _GlowOrb(
               size: 360,
-              color: AppColors.cyan.withValues(alpha: isDark ? 0.075 : 0.12),
+              color: colors.cyan.withValues(alpha: isDark ? 0.075 : 0.12),
             ),
           ),
           child,
@@ -68,14 +70,18 @@ class _GlowOrb extends StatelessWidget {
 }
 
 class _IndustrialBackdropPainter extends CustomPainter {
-  const _IndustrialBackdropPainter({required this.isDark});
+  const _IndustrialBackdropPainter({
+    required this.isDark,
+    required this.colors,
+  });
 
   final bool isDark;
+  final BlanquitaColors colors;
 
   @override
   void paint(Canvas canvas, Size size) {
     final line = Paint()
-      ..color = (isDark ? AppColors.coldWhite : const Color(0xFF17343D))
+      ..color = (isDark ? colors.coldWhite : const Color(0xFF17343D))
           .withValues(alpha: isDark ? 0.022 : 0.035)
       ..strokeWidth = 0.7;
     const step = 38.0;
@@ -86,7 +92,7 @@ class _IndustrialBackdropPainter extends CustomPainter {
     }
 
     final rail = Paint()
-      ..color = AppColors.cyan.withValues(alpha: isDark ? 0.025 : 0.04)
+      ..color = colors.cyan.withValues(alpha: isDark ? 0.025 : 0.04)
       ..strokeWidth = 1;
     canvas.drawLine(
       Offset(size.width * 0.78, 0),
@@ -97,5 +103,5 @@ class _IndustrialBackdropPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _IndustrialBackdropPainter oldDelegate) =>
-      oldDelegate.isDark != isDark;
+      oldDelegate.isDark != isDark || oldDelegate.colors != colors;
 }

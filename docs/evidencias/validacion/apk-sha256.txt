@@ -1,0 +1,5 @@
+
+Algorithm : SHA256
+Hash      : BAE96647D2DB82CF22F70BED054DF8066D6E0635EE170F9F85A7A5BAB245E3F2
+Path      : C:\Users\LOQ\Desktop\UNIFRANZ\SEXTO SEMESTRE\HARDWARE\BlanquitaAppMovil\build\app\outputs\flutter-apk\blanquita-alfresi-debug.apk
+

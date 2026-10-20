@@ -9,7 +9,8 @@ import '../core/network/wifi_network_controller.dart';
 import '../features/settings/controller/settings_controller.dart';
 import '../features/vision/controller/vision_controller.dart';
 import 'navigation/main_shell.dart';
-import 'theme/app_theme.dart';
+import 'design/blanquita_design.dart';
+import 'design/visual_transition.dart';
 
 class BlanquitaApp extends StatefulWidget {
   const BlanquitaApp({
@@ -116,11 +117,37 @@ class _BlanquitaAppState extends State<BlanquitaApp>
               systemNavigationBarContrastEnforced: false,
             ),
             child: MaterialApp(
-              title: 'BLANQUITA Víctor',
+              title: 'BLANQUITA ALFRESI',
               debugShowCheckedModeBanner: false,
-              theme: AppTheme.light,
-              darkTheme: AppTheme.dark,
+              theme: BlanquitaDesign.build(settings, Brightness.light),
+              darkTheme: BlanquitaDesign.build(settings, Brightness.dark),
               themeMode: settings.themeMode,
+              themeAnimationDuration:
+                  settings.reduceMotion ||
+                      settings.performanceMode ||
+                      MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : BlanquitaDesign.theme,
+              themeAnimationCurve: BlanquitaDesign.curve,
+              builder: (context, child) {
+                final media = MediaQuery.of(context);
+                return MediaQuery(
+                  data: media.copyWith(
+                    textScaler: BlanquitaTextScaler(
+                      media.textScaler,
+                      BlanquitaDesign.textScale(settings),
+                    ),
+                    disableAnimations:
+                        media.disableAnimations ||
+                        settings.reduceMotion ||
+                        settings.performanceMode,
+                  ),
+                  child: VisualTransition(
+                    theme: settings.visualTheme,
+                    child: child!,
+                  ),
+                );
+              },
               home: const MainShell(),
             ),
           );
