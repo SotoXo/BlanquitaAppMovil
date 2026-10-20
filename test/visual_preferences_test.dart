@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:blanquita/app/app.dart';
 import 'package:blanquita/app/design/blanquita_design.dart';
+import 'package:blanquita/app/navigation/blanquita_bottom_navigation.dart';
 import 'package:blanquita/core/models/machine_state.dart';
 import 'package:blanquita/core/network/wifi_network_controller.dart';
 import 'package:blanquita/core/network/wifi_network_service.dart';
@@ -151,36 +153,91 @@ void main() {
     );
     expect(
       AlfresiRules.explain(c).title,
-      'El control del robot está disponible',
+      'Esperando los sensores de seguridad',
     );
     expect(c.evidence['Final de carrera'], 'Sin datos');
     final pending = contextFor(transportOpen: true);
     expect(AlfresiRules.explain(pending).mood, AlfresiMood.thinking);
     expect(pending.lockReason, contains('READY'));
   });
+  test('ALFRESI distinguishes vision preparation from a failed connection', () {
+    final message = AlfresiRules.explain(
+      contextFor(
+        machine: const MachineState(
+          connection: ConnectionPhase.connected,
+          finalLimitActive: false,
+        ),
+        vision: const VisionState(connection: VisionConnection.reconnecting),
+      ),
+    );
+    expect(message.mood, AlfresiMood.thinking);
+    expect(message.title, 'Preparando la visión');
+  });
+  test(
+    'ALFRESI waits for sequence acknowledgement before claiming execution',
+    () {
+      final message = AlfresiRules.explain(
+        contextFor(
+          machine: const MachineState(
+            connection: ConnectionPhase.connected,
+            finalLimitActive: false,
+            sequence: SequencePhase.requested,
+          ),
+        ),
+      );
+      expect(message.mood, AlfresiMood.thinking);
+      expect(message.title, 'Esperando confirmación de la secuencia');
+    },
+  );
+  test(
+    'ALFRESI gives contradictory limit readings priority over networking',
+    () {
+      final message = AlfresiRules.explain(
+        contextFor(
+          machine: const MachineState(
+            connectionError: 'Sin red',
+            finalLimits: FinalLimitsState(
+              xIzquierda: LimitSwitchStatus.active,
+              xDerecha: LimitSwitchStatus.active,
+            ),
+          ),
+        ),
+      );
+      expect(message.mood, AlfresiMood.error);
+      expect(message.title, 'Revisa los finales de carrera');
+    },
+  );
 
   testWidgets(
     'Original ↔ Hamburguesa preserves real connected controllers, route and sockets',
     (tester) async {
       SharedPreferences.setMockInitialValues({
         'connection.websocket_url': 'ws://esp32.test:81/',
+        'esp32.laboratory_mode': true,
         'vision.websocket_url': 'ws://laptop.test:8765/',
         'connection.auto_reconnect': false,
         'vision.auto_reconnect': false,
         'control.haptics': false,
-        'ui.visualTheme': 'original',
+        'ui.visualTheme': 'hamburger',
       });
       final settings = SettingsController(
         SettingsRepository(await SharedPreferences.getInstance()),
       );
       await settings.load();
-      final controlChannel = TestVisionChannel();
-      final visionChannel = TestVisionChannel();
+      late TestVisionChannel controlChannel;
+      late TestVisionChannel visionChannel;
       var controlOpens = 0, visionOpens = 0;
       final machine = MachineController(
         settings,
         channelFactory: (_) {
           controlOpens++;
+          controlChannel = TestVisionChannel();
+          scheduleMicrotask(() {
+            controlChannel.incoming.add('READY');
+            for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+              controlChannel.incoming.add('SENSOR:FC:$name:0');
+            }
+          });
           return controlChannel;
         },
       );
@@ -189,6 +246,8 @@ void main() {
         service: RemoteVisionService(
           channelFactory: (_) {
             visionOpens++;
+            visionChannel = TestVisionChannel();
+            scheduleMicrotask(() => visionChannel.establish(DateTime.now()));
             return visionChannel;
           },
         ),
@@ -207,15 +266,27 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.runAsync(() async {
-        final connecting = machine.connect();
-        await vision.connect();
-        await Future<void>.delayed(Duration.zero);
-        controlChannel.incoming.add('READY');
-        visionChannel.receive('vision.ready', DateTime.now(), {'ready': true});
-        await connecting;
+        await Future.wait([machine.connect(), vision.connect()]);
       });
       await tester.pumpAndSettle();
       expect(machine.state.isConnected && vision.state.ready, true);
+      // Rapid and distant selections must land on the latest destination.
+      for (final index in [4, 2, 3, 0, 1]) {
+        tester
+            .widget<BlanquitaBottomNavigation>(
+              find.byType(BlanquitaBottomNavigation),
+            )
+            .onSelected(index);
+      }
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widget<BlanquitaBottomNavigation>(
+              find.byType(BlanquitaBottomNavigation),
+            )
+            .index,
+        1,
+      );
       await tester.tap(find.text('Control').last);
       await tester.pumpAndSettle();
       final beforeCommands = List.of(controlChannel.sink.sent);

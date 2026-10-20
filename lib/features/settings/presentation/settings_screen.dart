@@ -1,3 +1,6 @@
+import '../../vision/services/remote_vision_service.dart';
+import 'dart:async';
+import '../../../app/presentation/controller_ui_context.dart';
 import '../../assistant/presentation/alfresi_bubble.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -360,7 +363,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     BuildContext context,
     SettingsController settings,
   ) async {
-    final value = await showDialog<String>(
+    final route = DialogRoute<String>(
       context: context,
       builder: (_) => EndpointDialog(
         title: 'Dirección WebSocket',
@@ -369,25 +372,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
         hint: 'ws://192.168.137.209:81/',
       ),
     );
+    final value = await Navigator.of(context).push(route);
+    await route.completed;
     if (value == null || !context.mounted) return;
-    await settings.setWebsocketUrl(value);
+    await context.read<MachineController>().saveEndpointAndReconnect(value);
   }
 
   Future<void> _editVisionUrl(
     BuildContext context,
     SettingsController settings,
   ) async {
-    final value = await showDialog<String>(
+    final route = DialogRoute<String>(
       context: context,
       builder: (_) => EndpointDialog(
         title: 'URL Vision Server',
         label: 'URL laptop',
         initialValue: settings.settings.visionWebsocketUrl,
-        hint: 'ws://IP_REAL_LAPTOP:8765/',
+        hint: 'ws://IP_REAL_LAPTOP:8765/vision',
+        validator: (value) =>
+            value == null ||
+                value.trim().isEmpty ||
+                RemoteVisionService.isValidUrl(value)
+            ? null
+            : 'Usa ws://HOST:PUERTO/vision sin query ni fragmento.',
       ),
     );
+    final value = await Navigator.of(context).push(route);
+    await route.completed;
     if (value == null || !context.mounted) return;
-    await settings.setVisionWebsocketUrl(value);
+    final vision = context.read<VisionController>();
+    if (value.trim().isEmpty) {
+      await vision.disconnect();
+      await settings.setVisionWebsocketUrl('');
+    } else {
+      await vision.saveEndpointAndReconnect(value);
+    }
   }
 
   Future<void> _testVisionConnection(VisionController vision) async {
@@ -397,6 +416,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       check: vision.testConnection,
       cancel: vision.disconnect,
       error: () => vision.state.error,
+      progress: vision,
+      progressMessage: () => vision.progressMessage,
     );
   }
 }
@@ -468,11 +489,14 @@ class _ConnectionPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
+          const Esp32IdentityPanel(),
+          const SizedBox(height: 12),
           BlanquitaTimeline(
             transportOpen: machine.transportOpen,
             ready: machine.protocolReady,
             connecting: machine.isConnecting,
             phase: machine.phase,
+            linkPhase: machine.linkPhase,
           ),
           Text(
             'Red local: hotspot o router · sin depender del SSID',
@@ -540,6 +564,8 @@ class _ConnectionPanel extends StatelessWidget {
                         check: machine.testConnection,
                         cancel: machine.disconnect,
                         error: () => machine.state.connectionError,
+                        progress: machine,
+                        progressMessage: () => machine.progressMessage,
                       ),
                 icon: const Icon(CupertinoIcons.checkmark_shield, size: 17),
                 label: const Text('Probar conexión ESP32'),
@@ -579,7 +605,6 @@ class _ConnectionPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Esp32IdentityPanel(),
         ],
       ),
     );
@@ -878,4 +903,73 @@ class _NestedArrow extends StatelessWidget {
       color: BlanquitaColors.of(context).cyan,
     ),
   );
+}
+
+class _VisionConnectionPanel extends StatelessWidget {
+  const _VisionConnectionPanel({required this.vision, required this.onEdit});
+  final VisionController vision;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = vision.state.ready
+        ? BlanquitaColors.of(context).mint
+        : BlanquitaColors.of(context).warning;
+    return GlassPanel(
+      emphasis: GlassEmphasis.prominent,
+      borderColor: color.withValues(alpha: 0.22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(CupertinoIcons.desktopcomputer, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Visor inteligente',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Text(
+                      'Visor: ${visionConnectionLabel(vision.state)}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: color),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: 'Editar URL Vision Server',
+                onPressed: onEdit,
+                icon: const Icon(CupertinoIcons.pencil),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Dirección detectada: ${vision.detectedAddress ?? 'Sin dirección'}',
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'Discovery: ${vision.discoveryStatusLabel}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 5),
+          Text(
+            'URL: ${vision.connectionWebsocketUrl ?? (vision.endpoint.isEmpty ? 'Sin dirección guardada' : vision.endpoint)}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          GlassButton(
+            onPressed: vision.isConnecting ? null : vision.searchVision,
+            child: const Text('Buscar visor'),
+          ),
+        ],
+      ),
+    );
+  }
 }

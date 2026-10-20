@@ -1,3 +1,4 @@
+import '../features/settings/controller/app_settings.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -110,11 +111,21 @@ class _BlanquitaAppState extends State<BlanquitaApp>
           value: widget.visionController,
         ),
       ],
-      child: Selector<SettingsController, ThemeMode>(
-        selector: (_, controller) => controller.settings.themeMode,
-        child: const MainShell(),
-        builder: (context, themeMode, shell) {
-          final overlays = themeMode == ThemeMode.light
+      child: Selector<SettingsController, AppSettings>(
+        selector: (_, controller) => controller.settings,
+        shouldRebuild: (a, b) =>
+            a.themeMode != b.themeMode ||
+            a.visualTheme != b.visualTheme ||
+            a.font != b.font ||
+            a.textSize != b.textSize ||
+            a.density != b.density ||
+            a.customAccent != b.customAccent ||
+            a.reduceMotion != b.reduceMotion ||
+            a.performanceMode != b.performanceMode ||
+            a.shadowsEnabled != b.shadowsEnabled,
+        child: const StartupPresentation(child: MainShell()),
+        builder: (context, settings, shell) {
+          final overlays = settings.themeMode == ThemeMode.light
               ? SystemUiOverlayStyle.dark
               : SystemUiOverlayStyle.light;
           return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -155,7 +166,7 @@ class _BlanquitaAppState extends State<BlanquitaApp>
                   ),
                 );
               },
-              home: const StartupPresentation(child: MainShell()),
+              home: shell,
             ),
           );
         },

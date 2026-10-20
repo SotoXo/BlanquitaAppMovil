@@ -1,56 +1,109 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../app/design/blanquita_design.dart';
+import '../../settings/controller/settings_controller.dart';
 import '../domain/alfresi_message.dart';
 
-/// Exact viewports of the user's original artwork; no character redesign.
-class AlfresiAvatar extends StatelessWidget {
+enum AlfresiExpression { normal, triste, frustrado, enojado }
+
+/// Facial variants of the supplied ALFRESI; all production assets retain alpha.
+class AlfresiAvatar extends StatefulWidget {
   const AlfresiAvatar({
     super.key,
     this.mood = AlfresiMood.idle,
     this.size = AlfresiSizes.m,
+    this.expression,
   });
   final AlfresiMood mood;
   final double size;
+  final AlfresiExpression? expression;
+  @override
+  State<AlfresiAvatar> createState() => _AlfresiAvatarState();
+}
+
+class _AlfresiAvatarState extends State<AlfresiAvatar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _breath = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
+  bool _enabled = false;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final s = context.watch<SettingsController?>()?.settings;
+    final enabled =
+        s != null &&
+        s.assistantAnimations &&
+        !BlanquitaDesign.reduce(context, s) &&
+        TickerMode.valuesOf(context).enabled;
+    if (enabled != _enabled) {
+      _enabled = enabled;
+      if (enabled) {
+        _breath.repeat(reverse: true);
+      } else {
+        _breath.stop();
+        _breath.value = 0;
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final x = switch (mood) {
-      AlfresiMood.idle => 15.0,
-      AlfresiMood.success => 111.0,
-      AlfresiMood.thinking => 207.0,
-      AlfresiMood.warning => 397.0,
-      AlfresiMood.error => 493.0,
-    };
-    final hero = size >= AlfresiSizes.xl;
-    final width = hero ? 238.0 : 94.0;
-    final left = hero ? 18.0 : x;
-    final top = hero ? 162.0 : 863.0;
-    final factor = size / width;
+    final expression =
+        widget.expression ??
+        switch (widget.mood) {
+          AlfresiMood.error => AlfresiExpression.triste,
+          AlfresiMood.warning => AlfresiExpression.frustrado,
+          _ => AlfresiExpression.normal,
+        };
+    final asset = 'assets/alfresi/alfresi_${expression.name}_alpha.png';
     return ExcludeSemantics(
       child: SizedBox.square(
-        dimension: size,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(
-            hero ? BlanquitaRadius.hero : size / 2,
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                left: -left * factor,
-                top: -top * factor,
-                width: 1536 * factor,
-                height: 1024 * factor,
-                child: Image.asset(
-                  'assets/alfresi/referencia_frutilla.png',
-                  fit: BoxFit.fill,
-                  filterQuality: FilterQuality.high,
-                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                ),
+        dimension: widget.size,
+        child: AnimatedBuilder(
+          animation: _breath,
+          child: RepaintBoundary(
+            child: AnimatedSwitcher(
+              duration: _enabled ? BlanquitaMotion.modal : Duration.zero,
+              child: Image.asset(
+                asset,
+                key: ValueKey(asset),
+                width: widget.size,
+                height: widget.size,
+                fit: BoxFit.cover,
+                cacheHeight:
+                    (widget.size *
+                            MediaQuery.devicePixelRatioOf(context) *
+                            1.25)
+                        .ceil()
+                        .clamp(192, 1024),
+                filterQuality: FilterQuality.medium,
               ),
-            ],
+            ),
+          ),
+          builder: (context, child) => Transform.translate(
+            offset: Offset(0, -math.sin(_breath.value * math.pi) * 1.8),
+            child: Transform.rotate(
+              angle: widget.mood == AlfresiMood.thinking
+                  ? math.sin(_breath.value * math.pi * 2) * .025
+                  : 0,
+              child: Transform.scale(
+                scale: 1 + _breath.value * .025,
+                child: child,
+              ),
+            ),
           ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _breath.dispose();
+    super.dispose();
   }
 }
 

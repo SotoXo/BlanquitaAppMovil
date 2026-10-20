@@ -1,3 +1,5 @@
+import 'package:blanquita/core/network/wifi_network_controller.dart';
+import 'package:blanquita/core/network/wifi_network_service.dart';
 import 'package:blanquita/app/theme/app_theme.dart';
 import 'package:blanquita/core/models/machine_state.dart';
 import 'package:blanquita/core/websocket/machine_controller.dart';
@@ -27,7 +29,16 @@ Widget app(
     ChangeNotifierProvider<MachineController>.value(value: h.machine),
     ChangeNotifierProvider<SettingsController>.value(value: h.settings),
     if (vision != null)
-      ChangeNotifierProvider<VisionController>.value(value: vision),
+      ChangeNotifierProvider<VisionController>.value(value: vision)
+    else
+      ChangeNotifierProvider<VisionController>(
+        create: (_) => VisionController(h.settings),
+      ),
+    ChangeNotifierProvider<WifiNetworkController>(
+      create: (_) => WifiNetworkController(
+        service: WifiNetworkService(platformSupported: false),
+      ),
+    ),
   ],
   child: MaterialApp(
     theme: AppTheme.light,

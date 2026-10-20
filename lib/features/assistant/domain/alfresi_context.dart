@@ -1,3 +1,4 @@
+import '../../../app/presentation/controller_ui_context.dart';
 import '../../../core/models/machine_state.dart';
 import '../../vision/domain/vision_state.dart';
 import '../../../core/websocket/machine_controller.dart';
@@ -32,7 +33,7 @@ class AlfresiContext {
   final bool manualLocked, canMove, transportOpen;
   final String phase, section;
   String? get lockReason {
-    if (machine.finalLimitActive == true) {
+    if (machine.finalLimitActive == true && !canMove) {
       return 'Final de carrera activo. Movimiento bloqueado por seguridad.';
     }
     if (!machine.isConnected) {
@@ -41,6 +42,9 @@ class AlfresiContext {
           : machine.connection == ConnectionPhase.connecting
           ? 'Conexión con ESP32 en proceso.'
           : 'Sin conexión con el ESP32.';
+    }
+    if (!machine.finalLimits.isComplete && machine.isConnected) {
+      return 'Esperando lecturas de los cuatro finales de carrera.';
     }
     if (machine.sequenceActive) {
       return 'Secuencia activa. El movimiento manual está bloqueado.';

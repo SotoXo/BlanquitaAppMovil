@@ -1,9 +1,24 @@
 import '../domain/alfresi_context.dart';
 import '../domain/alfresi_message.dart';
 import '../../../core/models/machine_state.dart';
+import '../../vision/domain/vision_state.dart';
 
 abstract final class AlfresiRules {
   static AlfresiMessage explain(AlfresiContext c) {
+    if (c.machine.finalLimits.hasFault) {
+      return const AlfresiMessage(
+        'Revisa los finales de carrera',
+        'Los dos límites de un mismo eje aparecen activos. Ese eje permanece bloqueado. Revisa los sensores antes de continuar.',
+        AlfresiMood.error,
+      );
+    }
+    if (c.machine.finalLimitActive == true && c.canMove) {
+      return const AlfresiMessage(
+        'Final de carrera activo',
+        'La dirección afectada está bloqueada. Revisa los indicadores de seguridad.',
+        AlfresiMood.error,
+      );
+    }
     if (c.machine.finalLimitActive == true) {
       return const AlfresiMessage(
         'Movimiento bloqueado por seguridad',
@@ -11,7 +26,8 @@ abstract final class AlfresiRules {
         AlfresiMood.error,
       );
     }
-    if (c.machine.connectionError != null) {
+    if (c.machine.connectionError != null &&
+        c.machine.connection != ConnectionPhase.connecting) {
       return AlfresiMessage(
         'La conexión del ESP32 no pudo completarse',
         c.machine.connectionError!,
@@ -39,6 +55,21 @@ abstract final class AlfresiRules {
         AlfresiMood.warning,
       );
     }
+    if (!c.machine.finalLimits.isComplete &&
+        c.machine.finalLimitActive == null) {
+      return const AlfresiMessage(
+        'Esperando los sensores de seguridad',
+        'El ESP32 está conectado. Esperamos las lecturas de los cuatro finales de carrera para habilitar el movimiento.',
+        AlfresiMood.thinking,
+      );
+    }
+    if (c.machine.sequence == SequencePhase.requested) {
+      return const AlfresiMessage(
+        'Esperando confirmación de la secuencia',
+        'La orden fue enviada al ESP32. Esperamos su respuesta antes de mostrar la secuencia como iniciada. El control manual permanece bloqueado.',
+        AlfresiMood.thinking,
+      );
+    }
     if (c.machine.sequenceActive) {
       return const AlfresiMessage(
         'Secuencia activa',
@@ -54,6 +85,15 @@ abstract final class AlfresiRules {
       );
     }
     if (!c.vision.ready) {
+      if (c.vision.connection == VisionConnection.connecting ||
+          c.vision.connection == VisionConnection.reconnecting ||
+          (c.vision.isConnected && !c.vision.stale)) {
+        return const AlfresiMessage(
+          'Preparando la visión',
+          'Esperando la confirmación del servicio de la laptop. La conexión del ESP32 se mantiene independiente.',
+          AlfresiMood.thinking,
+        );
+      }
       return AlfresiMessage(
         c.canMove
             ? 'El control del robot está disponible'
@@ -106,6 +146,8 @@ abstract final class AlfresiRules {
       'Aquí puedes personalizar BLANQUITA y revisar las conexiones de ESP32 y Visión por separado.',
     'Diagnósticos' =>
       'Revisa las fases observadas y la bitácora. Puedes copiar los eventos para compartir el diagnóstico.',
+    'Dispositivos' || 'Vinculación' =>
+      'Busca los equipos en la misma red Wi-Fi. Selecciona la identidad del ESP32 y revisa su vinculación. La visión de la laptop se conecta por separado.',
     _ =>
       'Aquí tienes el estado general, las conexiones, los sensores informados y la actividad reciente del robot.',
   };

@@ -1,3 +1,4 @@
+import 'package:blanquita/app/presentation/controller_ui_context.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -46,12 +47,13 @@ class _Fixture {
   late SettingsController settings;
   late MachineController machine;
   late VisionController vision;
-  final control = TestVisionChannel();
-  final camera = TestVisionChannel();
+  late TestVisionChannel control;
+  late TestVisionChannel camera;
   late WifiNetworkController wifi;
   Future<void> load() async {
     SharedPreferences.setMockInitialValues({
       'connection.websocket_url': 'ws://esp32.test:81/',
+      'esp32.laboratory_mode': true,
       'vision.websocket_url': 'ws://laptop.test:8765/',
       'connection.auto_reconnect': false,
       'vision.auto_reconnect': false,
@@ -63,10 +65,28 @@ class _Fixture {
       SettingsRepository(await SharedPreferences.getInstance()),
     );
     await settings.load();
-    machine = MachineController(settings, channelFactory: (_) => control);
+    control = TestVisionChannel();
+    camera = TestVisionChannel();
+    machine = MachineController(
+      settings,
+      channelFactory: (_) {
+        scheduleMicrotask(() {
+          control.incoming.add('READY');
+          for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+            control.incoming.add('SENSOR:FC:$name:0');
+          }
+        });
+        return control;
+      },
+    );
     vision = VisionController(
       settings,
-      service: RemoteVisionService(channelFactory: (_) => camera),
+      service: RemoteVisionService(
+        channelFactory: (_) {
+          scheduleMicrotask(() => camera.establish(DateTime.now()));
+          return camera;
+        },
+      ),
       tickInterval: const Duration(days: 1),
     );
     wifi = WifiNetworkController(
@@ -87,12 +107,7 @@ class _Fixture {
   );
   Future<void> connect(WidgetTester tester) async {
     await tester.runAsync(() async {
-      final connecting = machine.connect();
-      await vision.connect();
-      await Future<void>.delayed(Duration.zero);
-      control.incoming.add('READY');
-      camera.receive('vision.ready', DateTime.now(), {'ready': true});
-      await connecting;
+      await Future.wait([machine.connect(), vision.connect()]);
     });
     await tester.pumpAndSettle();
     expect(machine.protocolReady && vision.state.ready, true);
@@ -224,7 +239,8 @@ void main() {
       await tester.pumpAndSettle();
       f.machine.setManualControlsLocked(true);
       await tester.pumpAndSettle();
-      expect(find.text('Control bloqueado'), findsOneWidget);
+      expect(f.machine.canStartMovement, isFalse);
+      expect(find.text('Control manual bloqueado por el usuario.'), findsWidgets);
       await snapshot(tester, '10-bloqueo');
       expect(tester.takeException(), isNull);
       await f.close(tester);

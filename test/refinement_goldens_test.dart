@@ -1,3 +1,4 @@
+import 'package:blanquita/core/models/esp32_device.dart';
 import 'package:blanquita/app/navigation/main_shell.dart';
 import 'package:blanquita/features/settings/controller/app_settings.dart';
 import 'package:blanquita/features/assistant/presentation/alfresi_panel.dart';
@@ -47,6 +48,12 @@ class VisualMachine extends MachineController {
   MachineState get state => MachineState(
     connection: ConnectionPhase.connected,
     finalLimitActive: locked,
+    finalLimits: FinalLimitsState(
+      xIzquierda: locked ? LimitSwitchStatus.active : LimitSwitchStatus.free,
+      xDerecha: LimitSwitchStatus.free,
+      zArriba: LimitSwitchStatus.free,
+      zAbajo: LimitSwitchStatus.free,
+    ),
     plateDetected: false,
     gripper: GripperState.closed,
     lastStatus: locked ? 'Final de carrera activo' : 'READY confirmado',
@@ -57,11 +64,14 @@ class VisualMachine extends MachineController {
   @override
   bool get canStartMovement => !locked;
   @override
-  bool get protocolReady => true;
+  bool get hasValidConnection => true;
   @override
-  bool get transportOpen => true;
+  bool get isAuthorized => true;
   @override
-  String get phase => 'connected';
+  Esp32LinkPhase get linkPhase => Esp32LinkPhase.authorized;
+  @override
+  bool canMove(MovementDirection direction) => !locked;
+
   @override
   List<MachineEvent> get events => [
     MachineEvent(
@@ -80,7 +90,7 @@ class VisualVision extends VisionController {
     status: VisionStatus(ready: true),
   );
   @override
-  bool get transportOpen => true;
+  VisionNetworkPhase get networkPhase => VisionNetworkPhase.ready;
 }
 
 Future<void> captureScreen(
@@ -178,18 +188,18 @@ Future<void> captureScreen(
       ),
     ),
   );
-  await tester.runAsync(
-    () => precacheImage(
-      const AssetImage('assets/alfresi/referencia_frutilla.png'),
-      tester.element(find.byKey(frame)),
-    ),
-  );
+  await tester.runAsync(() async {for(final name in ['normal','triste','frustrado','enojado']) {await precacheImage(AssetImage('assets/alfresi/alfresi_${name}_alpha.png'),tester.element(find.byKey(frame)));}});
   await tester.runAsync(
     () => precacheImage(
       const AssetImage('assets/alfresi/fondo_hamburguesa.png'),
       tester.element(find.byKey(frame)),
     ),
   );
+  await tester.runAsync(() async {
+    for (final widget in tester.widgetList<Image>(find.byType(Image))) {
+      await precacheImage(widget.image, tester.element(find.byKey(frame)));
+    }
+  });
   if (inspect != null) await inspect(tester, settings);
   await tester.pumpAndSettle();
   expect(tester.takeException(), isNull);

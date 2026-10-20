@@ -1,3 +1,4 @@
+import 'package:flutter/scheduler.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -1121,6 +1122,30 @@ class MachineController extends ChangeNotifier {
     if (_events.length > maxEvents) {
       _events.removeRange(maxEvents, _events.length);
     }
+  }
+
+  bool _uiNotificationPending = false;
+  // Keep physical commands synchronous; only defer presentation notifications
+  // while Flutter unmounts/builds a held control inside a locked widget tree.
+  @override
+  void notifyListeners() {
+    if (_disposed) return;
+    SchedulerBinding? binding;
+    try {
+      binding = SchedulerBinding.instance;
+    } catch (_) {
+      /* Pure controller tests have no widget binding. */
+    }
+    if (binding?.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      if (_uiNotificationPending) return;
+      _uiNotificationPending = true;
+      scheduleMicrotask(() {
+        _uiNotificationPending = false;
+        if (!_disposed) super.notifyListeners();
+      });
+      return;
+    }
+    super.notifyListeners();
   }
 
   @override

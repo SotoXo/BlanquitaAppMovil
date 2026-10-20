@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../app/theme/app_theme.dart';
+import '../../app/design/blanquita_design.dart';
 import '../../core/models/machine_state.dart';
 import '../../features/settings/controller/settings_controller.dart';
 import 'page_header.dart';
@@ -53,29 +53,33 @@ class FinalLimitsPanel extends StatelessWidget {
           _notice(
             context,
             'Sin datos completos de los cuatro finales. Movimiento deshabilitado hasta recibir nuevas lecturas.',
-            AppColors.steel,
+            BlanquitaColors.of(context).steel,
           ),
         if (limits.xFault)
           _notice(
             context,
             'Fallo de sensores del eje X: ambos extremos activados. Eje X bloqueado; revisa los finales y su cableado.',
-            AppColors.danger,
+            BlanquitaColors.of(context).danger,
           ),
         if (limits.zFault)
           _notice(
             context,
             'Fallo de sensores del eje Z: ambos extremos activados. Eje Z bloqueado; revisa los finales y su cableado.',
-            AppColors.danger,
+            BlanquitaColors.of(context).danger,
           ),
         for (final limit in FinalLimit.values)
           if (limits[limit] == LimitSwitchStatus.active &&
               !limits.axisFault(limit.direction))
-            _notice(context, limit.retreatMessage, AppColors.danger),
+            _notice(
+              context,
+              limit.retreatMessage,
+              BlanquitaColors.of(context).danger,
+            ),
         if (awaitingRelease)
           _notice(
             context,
             'Suelta el botón antes de iniciar otro movimiento.',
-            AppColors.warning,
+            BlanquitaColors.of(context).warning,
           ),
       ],
     );
@@ -84,9 +88,9 @@ class FinalLimitsPanel extends StatelessWidget {
   Widget _indicator(BuildContext context, FinalLimit limit, Duration duration) {
     final status = limits[limit];
     final color = switch (status) {
-      LimitSwitchStatus.free => AppColors.mint,
-      LimitSwitchStatus.active => AppColors.danger,
-      LimitSwitchStatus.unknown => AppColors.steel,
+      LimitSwitchStatus.free => BlanquitaColors.of(context).mint,
+      LimitSwitchStatus.active => BlanquitaColors.of(context).danger,
+      LimitSwitchStatus.unknown => BlanquitaColors.of(context).steel,
     };
     return Semantics(
       label: '${limit.label}: ${status.label}',

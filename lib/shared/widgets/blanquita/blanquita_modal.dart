@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../app/design/blanquita_design.dart';
 import '../../../features/settings/controller/settings_controller.dart';
+import '../thinking_indicator.dart';
 
 enum BlanquitaModalType { info, success, warning, error, confirmation, loading }
 
@@ -78,7 +79,9 @@ class BlanquitaModal extends StatelessWidget {
       BlanquitaModalType.success => (Icons.check_circle_outline, colors.mint),
       BlanquitaModalType.loading => (
         Icons.pending_outlined,
-        BlanquitaColors.info,
+        Theme.of(context).brightness == Brightness.dark
+            ? BlanquitaColors.info
+            : colors.cyan,
       ),
       BlanquitaModalType.error => (Icons.error_outline, colors.danger),
       BlanquitaModalType.warning ||
@@ -150,39 +153,17 @@ class BlanquitaModal extends StatelessWidget {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const SizedBox(height: BlanquitaSpacing.sm),
-                      Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      Semantics(
+                        liveRegion: type == BlanquitaModalType.loading,
+                        child: Text(
+                          message,
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
                       ),
                       if (type == BlanquitaModalType.loading) ...[
                         const SizedBox(height: BlanquitaSpacing.lg),
-                        if (reduce)
-                          Semantics(
-                            label: 'Esperando respuesta; progreso no informado',
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                for (var i = 0; i < 3; i++)
-                                  Padding(
-                                    padding: const EdgeInsets.all(
-                                      BlanquitaSpacing.xs,
-                                    ),
-                                    child: Icon(
-                                      Icons.circle,
-                                      size: 6,
-                                      color: color,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          )
-                        else
-                          LinearProgressIndicator(
-                            color: color,
-                            backgroundColor: color.withValues(alpha: .15),
-                            borderRadius: BlanquitaRadius.card,
-                          ),
+                        ThinkingIndicator(color: color),
                       ],
                       if (actions.isNotEmpty) ...[
                         const SizedBox(height: BlanquitaSpacing.xl),
@@ -220,7 +201,16 @@ class BlanquitaModal extends StatelessWidget {
             )
           : Icon(icon, color: color, size: 40),
       title: Text(title),
-      content: Text(message),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(message),
+          if (type == BlanquitaModalType.loading) ...[
+            const SizedBox(height: 16),
+            ThinkingIndicator(color: color),
+          ],
+        ],
+      ),
       actions: actions,
       actionsOverflowButtonSpacing: 8,
     );

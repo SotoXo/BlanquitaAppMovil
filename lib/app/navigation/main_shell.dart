@@ -20,8 +20,17 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell>
+    with SingleTickerProviderStateMixin {
   final PageController _pageController = PageController();
+  late final _transition = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: 1,
+  );
+  late final _opacity = _transition
+      .drive(CurveTween(curve: Curves.easeOutCubic))
+      .drive(Tween(begin: .72, end: 1.0));
   int _index = 0;
 
   static const _pages = [
@@ -37,22 +46,20 @@ class _MainShellState extends State<MainShell> {
     setState(() => _index = index);
     final settings = context.read<SettingsController>().settings;
     final reduceMotion = BlanquitaDesign.reduce(context, settings);
+    // Jump directly so distant destinations never expose intermediate screens.
+    _pageController.jumpToPage(index);
     if (reduceMotion) {
-      _pageController.jumpToPage(index);
+      _transition.value = 1;
     } else {
-      _pageController.animateToPage(
-        index,
-        duration: const Duration(milliseconds: 330),
-        curve: Curves.easeOutCubic,
-      );
+      _transition.forward(from: 0);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final warm =
-        context.watch<SettingsController>().settings.visualTheme !=
-        BlanquitaVisualTheme.original;
+    final settings = context.watch<SettingsController>().settings;
+    final warm = settings.visualTheme != BlanquitaVisualTheme.original;
+    final reduce = BlanquitaDesign.reduce(context, settings);
     return AppBackground(
       scene: _index,
       child: Scaffold(
@@ -63,13 +70,16 @@ class _MainShellState extends State<MainShell> {
             : null,
         body: Stack(
           children: [
-            PageView(
-              controller: _pageController,
-              physics: const NeverScrollableScrollPhysics(),
-              onPageChanged: (value) {
-                if (_index != value) setState(() => _index = value);
-              },
-              children: _pages,
+            FadeTransition(
+              opacity: reduce ? const AlwaysStoppedAnimation(1.0) : _opacity,
+              child: PageView(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(),
+                onPageChanged: (value) {
+                  if (_index != value) setState(() => _index = value);
+                },
+                children: _pages,
+              ),
             ),
             if (!warm)
               Positioned(
@@ -98,6 +108,7 @@ class _MainShellState extends State<MainShell> {
   @override
   void dispose() {
     _pageController.dispose();
+    _transition.dispose();
     super.dispose();
   }
 }

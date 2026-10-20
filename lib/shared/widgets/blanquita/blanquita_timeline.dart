@@ -1,3 +1,4 @@
+import '../../../core/models/esp32_device.dart';
 import 'package:flutter/material.dart';
 import '../../../app/design/blanquita_design.dart';
 
@@ -9,15 +10,39 @@ class BlanquitaTimeline extends StatelessWidget {
     required this.ready,
     required this.connecting,
     required this.phase,
+    this.linkPhase,
   });
   final bool transportOpen, ready, connecting;
   final String phase;
+  final Esp32LinkPhase? linkPhase;
   @override
   Widget build(BuildContext context) {
-    final steps = [
-      ('Conectar', transportOpen || ready, connecting && !transportOpen),
-      ('Confirmar READY', ready, transportOpen && !ready),
+    final p = linkPhase;
+    final stages = [
+      Esp32LinkPhase.connecting,
+      Esp32LinkPhase.identityVerified,
+      Esp32LinkPhase.authenticating,
+      Esp32LinkPhase.authorized,
     ];
+    final stage = p == null ? -1 : stages.indexOf(p);
+    final steps = p != null && p != Esp32LinkPhase.laboratory
+        ? [
+            for (var i = 0; i < stages.length; i++)
+              (
+                [
+                  'Conectar',
+                  'Verificar identidad',
+                  'Autenticar',
+                  'Autorizar',
+                ][i],
+                stage > i || p == Esp32LinkPhase.authorized,
+                stage == i && p != Esp32LinkPhase.authorized,
+              ),
+          ]
+        : [
+            ('Conectar', transportOpen || ready, connecting && !transportOpen),
+            ('Confirmar READY', ready, transportOpen && !ready),
+          ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

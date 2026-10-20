@@ -9,12 +9,14 @@ class EndpointDialog extends StatefulWidget {
     required this.label,
     required this.initialValue,
     required this.hint,
+    this.validator,
   });
 
   final String title;
   final String label;
   final String initialValue;
   final String hint;
+  final FormFieldValidator<String>? validator;
 
   static String? validate(String? value) {
     final input = value?.trim() ?? '';
@@ -106,7 +108,7 @@ class _EndpointDialogState extends State<EndpointDialog> {
           helperText: 'Deja vacío para quitar esta dirección.',
           errorMaxLines: 3,
         ),
-        validator: EndpointDialog.validate,
+        validator: widget.validator ?? EndpointDialog.validate,
         autovalidateMode: _showValidationErrors
             ? AutovalidateMode.onUserInteraction
             : AutovalidateMode.disabled,

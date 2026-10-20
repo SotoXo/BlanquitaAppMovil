@@ -1,3 +1,5 @@
+import '../../../shared/widgets/final_limits_panel.dart';
+import '../../../app/presentation/controller_ui_context.dart';
 import '../../assistant/presentation/alfresi_bubble.dart';
 import '../../assistant/domain/alfresi_context.dart';
 import '../../assistant/services/alfresi_rules.dart';
@@ -56,7 +58,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       'Último RX': state.lastMessage ?? '—',
       'Último TX': state.lastCommand ?? '—',
       'Última recepción': _reception(state.lastReceivedAt),
-      'Intento de reconexión': '${machine.reconnectAttempts}',
+      'Intento de reconexión': '${machine.reconnectAttempts ?? 'No informado'}',
       'Último error': state.connectionError ?? 'Sin error registrado',
       'Código': machine.lastErrorCode ?? '—',
     };
@@ -71,7 +73,18 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
       'Última recepción': _reception(vs.lastMessageAt),
       'Intento de reconexión': '${vision.reconnectAttempts}',
       'Último error': vs.error ?? 'Sin error registrado',
-      'Código': vision.lastErrorCode ?? '—',
+      'Categoría': vision.lastFailure?.category ?? '—',
+      'Estado interno': vision.networkPhase.label,
+      'Intento actual': '${vision.connectionAttempt}',
+      'IP detectada': vision.detectedAddress ?? '—',
+      'Puerto detectado': '${vision.detectedPort ?? '—'}',
+      'URI efectiva': redactConnectionText(
+        vision.connectionWebsocketUrl ?? '—',
+      ),
+      'Primera excepción': redactConnectionText(
+        vision.firstFailure?.toString() ?? 'Sin excepción registrada',
+      ),
+      'Último HTTP': '${vision.lastFailure?.httpStatus ?? '—'}',
     };
 
     return AppBackground(
@@ -120,6 +133,20 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                     ),
                     const SizedBox(height: 16),
                     if (_view == 0) ...[
+                      FinalLimitsPanel(
+                        limits: state.finalLimits,
+                        awaitingRelease: machine.awaitingMovementRelease,
+                      ),
+                      const SizedBox(height: 16),
+                      const SectionLabel('Canal WebSocket ESP32'),
+                      const Text('Vision Server'),
+                      SwitchListTile(
+                        title: const Text(
+                          'Diagnóstico sin reconexión automática',
+                        ),
+                        value: vision.diagnosticMode,
+                        onChanged: vision.setDiagnosticMode,
+                      ),
                       const WifiNetworkPanel(),
                       const SizedBox(height: 14),
                       _ResponsivePair(
@@ -183,6 +210,11 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                       ),
                     const SizedBox(height: 24),
                     if (_view == 1) ...[
+                      FinalLimitsPanel(
+                        limits: state.finalLimits,
+                        awaitingRelease: machine.awaitingMovementRelease,
+                      ),
+                      const SizedBox(height: 16),
                       const SectionLabel('Telemetría del ESP32'),
                       const SizedBox(height: 10),
                       _ResponsivePair(

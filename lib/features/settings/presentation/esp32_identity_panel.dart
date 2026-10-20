@@ -5,6 +5,10 @@ import '../../../core/models/esp32_device.dart';
 import '../../../core/protocol/esp32_session.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../controller/app_settings.dart';
+import '../../../app/presentation/controller_ui_context.dart';
+import '../../../core/diagnostics/connection_log.dart';
+import '../../../shared/widgets/blanquita/blanquita_connection_feedback.dart';
+import '../../../shared/widgets/thinking_indicator.dart';
 
 class Esp32IdentityPanel extends StatelessWidget {
   const Esp32IdentityPanel({super.key});
@@ -16,7 +20,7 @@ class Esp32IdentityPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Estado WebSocket: ${machine.connectionStatusLabel}'),
+        Text('Transporte: ${machine.connectionStatusLabel}'),
         Text('Estado: ${machine.linkPhase.label}'),
         Text('Autenticación: ${machine.authenticationLabel}'),
         Text(
@@ -26,7 +30,12 @@ class Esp32IdentityPanel extends StatelessWidget {
         if (selected != null)
           Text('Nombre: ${selected.name} · ${selected.deviceType}'),
         if (machine.lastError != null)
-          Text('Último error: ${machine.lastError}'),
+          Text(redactConnectionText('Último error: ${machine.lastError}')),
+        if (machine.isConnecting || machine.isDiscovering) ...[
+          const SizedBox(height: 12),
+          ThinkingIndicator(label: machine.progressMessage),
+          const SizedBox(height: 12),
+        ],
         SwitchListTile.adaptive(
           contentPadding: EdgeInsets.zero,
           title: const Text('Laboratorio con firmware antiguo'),
@@ -120,6 +129,7 @@ class Esp32IdentityPanel extends StatelessWidget {
         route = ModalRoute.of(ctx) as TransitionRoute<bool>;
         return AlertDialog(
           title: const Text('Identidad física del ESP32'),
+          scrollable: true,
           content: Form(
             key: form,
             child: Column(
@@ -186,6 +196,7 @@ class Esp32IdentityPanel extends StatelessWidget {
         route = ModalRoute.of(ctx) as TransitionRoute<bool>;
         return AlertDialog(
           title: const Text('Vincular ESP32 V2'),
+          scrollable: true,
           content: Form(
             key: form,
             child: TextFormField(
@@ -194,12 +205,14 @@ class Esp32IdentityPanel extends StatelessWidget {
               autocorrect: false,
               enableSuggestions: false,
               decoration: const InputDecoration(
-                labelText: 'Clave física de 64 caracteres hex',
-                helperText: 'Pendiente de firmware V2 compatible.',
+                labelText: 'Clave del dispositivo',
+                helperText:
+                    'Copia los 64 caracteres de la clave física. Requiere firmware V2 compatible.',
+                helperMaxLines: 3,
               ),
               validator: (s) => Esp32Session.validSecret(s ?? '')
                   ? null
-                  : 'Se requieren 64 caracteres hex minúscula',
+                  : 'Introduce los 64 caracteres (0–9 y a–f) de la clave.',
             ),
           ),
           actions: [
@@ -221,6 +234,14 @@ class Esp32IdentityPanel extends StatelessWidget {
     final value = secret.text;
     secret.dispose();
     if (accepted != true || !context.mounted) return;
-    await machine.pairSelected(value);
+    await showConnectionFeedback(
+      context,
+      device: 'ESP32',
+      check: () => machine.pairSelected(value),
+      cancel: machine.disconnect,
+      error: () => machine.lastError,
+      progress: machine,
+      progressMessage: () => machine.progressMessage,
+    );
   }
 }

@@ -9,6 +9,7 @@ import '../domain/alfresi_context.dart';
 import '../domain/alfresi_message.dart';
 import '../services/alfresi_rules.dart';
 import 'alfresi_avatar.dart';
+import '../../../shared/widgets/thinking_indicator.dart';
 
 class AlfresiButton extends StatelessWidget {
   const AlfresiButton({super.key, required this.section});
@@ -43,6 +44,9 @@ class AlfresiButton extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(0),
               child: AlfresiAvatar(
+                expression: c.machine.finalLimits.anyActive
+                    ? AlfresiExpression.enojado
+                    : null,
                 mood: s.assistantAlerts ? message.mood : AlfresiMood.idle,
               ),
             ),
@@ -120,6 +124,10 @@ class AlfresiPanel extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
+                      if (message.mood == AlfresiMood.thinking) ...[
+                        const ThinkingIndicator(),
+                        const SizedBox(height: 12),
+                      ],
                       Text(redactConnectionText(message.body)),
                       const SizedBox(height: 20),
                       ExpansionTile(

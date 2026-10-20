@@ -17,6 +17,7 @@ import '../../../features/settings/controller/settings_controller.dart';
 import '../../../shared/widgets/glass_surface.dart';
 import '../../../shared/widgets/final_limits_panel.dart';
 import '../../../shared/widgets/motion_reveal.dart';
+import '../../../shared/widgets/thinking_indicator.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/status_widgets.dart';
 import '../widgets/hold_to_move_button.dart';
@@ -71,17 +72,36 @@ class ControlScreen extends StatelessWidget {
                   ),
                 ],
                 const SizedBox(height: 15),
-                if (state.finalLimitActive == true) ...[
+                if (state.finalLimitActive == true &&
+                    !state.finalLimits.isComplete) ...[
                   SafetyBanner(
                     icon: CupertinoIcons.exclamationmark_triangle,
                     title: 'Final de carrera activado',
                     message:
-                        'Movimiento bloqueado por seguridad. Pinza y STOP siguen disponibles.',
+                        'Esperando los cuatro finales. Pinza y STOP siguen disponibles.',
                     color: BlanquitaColors.of(context).danger,
                   ),
                   const SizedBox(height: 12),
                 ],
-                if (lockReason != null) ...[
+                if (lockReason != null && machine.hasValidConnection) ...[
+                  GlassPanel(
+                    padding: BlanquitaSpacing.compact,
+                    child: Row(
+                      children: [
+                        const Icon(Icons.lock_outline, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            lockReason,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (lockReason != null && !machine.hasValidConnection) ...[
                   BlanquitaLockState(
                     reason: lockReason,
                     critical: state.finalLimitActive == true,
@@ -105,6 +125,15 @@ class ControlScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 _EmergencyDock(machine: machine),
+                const SizedBox(height: 12),
+                GlassPanel(
+                  child: FinalLimitsPanel(
+                    limits: state.finalLimits,
+                    awaitingRelease:
+                        machine.awaitingMovementRelease &&
+                        state.activeMovement == null,
+                  ),
+                ),
                 const SizedBox(height: 16),
                 MotionReveal(
                   delay: const Duration(milliseconds: 115),
@@ -258,15 +287,6 @@ class _ControlConsole extends StatelessWidget {
           ],
           const SizedBox(height: 14),
           _ControlPad(machine: machine),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
-            child: Divider(height: 1),
-          ),
-          FinalLimitsPanel(
-            limits: state.finalLimits,
-            awaitingRelease:
-                machine.awaitingMovementRelease && state.activeMovement == null,
-          ),
         ],
       ),
     );
@@ -280,7 +300,6 @@ class _ControlPad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = machine.state;
-    final enabled = machine.canStartMovement;
     final available = (MediaQuery.sizeOf(context).width.clamp(0, 516) - 88) / 3;
     var labelHeight = 0.0;
     for (final label in ['Subir Z', 'Bajar Z', 'Izquierda', 'Derecha']) {
@@ -303,7 +322,9 @@ class _ControlPad extends StatelessWidget {
           movement: direction,
           icon: icon,
           label: label,
-          enabled: enabled || state.activeMovement == direction,
+          enabled:
+              machine.canMove(direction) || state.activeMovement == direction,
+          limitBlocked: state.finalLimits.blocks(direction),
           active: state.activeMovement == direction,
         );
     final warm =
@@ -367,7 +388,7 @@ class _ControlPad extends StatelessWidget {
                   .5,
                   .5,
                   _StopButton(
-                    enabled: state.isConnected,
+                    enabled: machine.hasValidConnection,
                     onPressed: machine.stopNow,
                   ),
                   stop,
@@ -433,7 +454,7 @@ class _ControlPad extends StatelessWidget {
                 const SizedBox(width: 9),
                 Expanded(
                   child: _StopButton(
-                    enabled: state.isConnected,
+                    enabled: machine.hasValidConnection,
                     onPressed: machine.stopNow,
                   ),
                 ),
@@ -506,7 +527,7 @@ class _StopButtonState extends State<_StopButton> {
             margin: const EdgeInsets.all(9),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: BlanquitaColors.of(context).danger,
+              color: BlanquitaColors.ketchup,
               border: Border.all(
                 color: BlanquitaColors.of(
                   context,
@@ -764,6 +785,10 @@ class _SequencePanel extends StatelessWidget {
               cancelled: state.sequence == SequencePhase.cancelled,
             ),
           const SizedBox(height: 14),
+          if (state.sequence == SequencePhase.requested) ...[
+            const ThinkingIndicator(label: 'Esperando la respuesta del ESP32…'),
+            const SizedBox(height: 12),
+          ],
           FilledButton.icon(
             onPressed: machine.canStartSequence
                 ? () => _confirmAndStart(context, machine)
@@ -775,7 +800,9 @@ class _SequencePanel extends StatelessWidget {
               size: 18,
             ),
             label: Text(
-              state.sequenceActive
+              state.sequence == SequencePhase.requested
+                  ? 'Esperando confirmación'
+                  : state.sequenceActive
                   ? 'Secuencia en curso'
                   : 'Ejecutar secuencia',
             ),
@@ -941,7 +968,7 @@ class _EmergencyDock extends StatelessWidget {
       onPressed: machine.state.isConnected ? machine.emergencyStop : null,
       style: FilledButton.styleFrom(
         side: BorderSide(color: BlanquitaColors.of(context).danger),
-        backgroundColor: BlanquitaColors.of(context).danger,
+        backgroundColor: BlanquitaColors.ketchup,
         foregroundColor: Colors.white,
         disabledBackgroundColor: BlanquitaColors.of(
           context,
@@ -964,6 +991,10 @@ class _EmergencyDock extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const Text(
+                  'DETENER',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                ),
                 const Text(
                   'DETENCIÓN INMEDIATA',
                   style: TextStyle(fontWeight: FontWeight.w800),

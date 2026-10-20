@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/storage/settings_repository.dart';
-import '../../../core/diagnostics/connection_log.dart';
 import '../../../core/models/esp32_device.dart';
 import '../../vision/domain/vision_endpoint.dart';
 import 'app_settings.dart';
@@ -11,8 +10,6 @@ class SettingsController extends ChangeNotifier {
 
   final SettingsRepository _repository;
   AppSettings _settings = const AppSettings();
-  Future<void> _pendingSave = Future.value();
-  bool _disposed = false;
 
   AppSettings get settings => _settings;
 
@@ -22,27 +19,10 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _update(AppSettings next) {
-    // Serialize snapshots so an earlier save cannot overwrite newer settings.
+  Future<void> _update(AppSettings next) async {
     _settings = next;
-    final save = _pendingSave.then((_) async {
-      try {
-        await _repository.save(next);
-        if (!_disposed && identical(_settings, next)) notifyListeners();
-      } catch (error, stackTrace) {
-        ConnectionLog.shared.add(
-          channel: ConnectionChannel.system,
-          level: ConnectionLogLevel.error,
-          humanMessage: 'No se pudieron guardar los ajustes en el teléfono.',
-          technicalMessage: '${error.runtimeType}: $error\n$stackTrace',
-          errorCode: 'SETTINGS_SAVE_FAILED',
-          phase: 'persistence',
-        );
-        rethrow;
-      }
-    });
-    _pendingSave = save.catchError((Object _) {});
-    return save;
+    notifyListeners();
+    await _repository.save(next);
   }
 
   Future<void> setVisualTheme(BlanquitaVisualTheme value) =>
@@ -120,10 +100,4 @@ class SettingsController extends ChangeNotifier {
   Future<void> setVisionMinimumConfidence(double value) => _update(
     _settings.copyWith(visionMinimumConfidence: value.clamp(0.0, 1.0)),
   );
-
-  @override
-  void dispose() {
-    _disposed = true;
-    super.dispose();
-  }
 }

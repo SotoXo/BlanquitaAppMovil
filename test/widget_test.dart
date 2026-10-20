@@ -75,6 +75,7 @@ void main() {
       );
       await tester.pumpWidget(
         BlanquitaApp(
+          wifiController: _testWifiController(),
           settingsController: settings,
           machineController: machine,
           visionController: vision,
@@ -272,7 +273,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         settings.settings.visionWebsocketUrl,
-        'ws://laptop.test:${8765 + cycle}/',
+        'ws://laptop.test:${8765 + cycle}/vision',
       );
       expect(settings.settings.websocketUrl, 'ws://esp32.test:${81 + cycle}/');
 
@@ -554,6 +555,7 @@ void main() {
   testWidgets('held movement stops when its widget unmounts', (tester) async {
     SharedPreferences.setMockInitialValues({
       'connection.websocket_url': 'ws://esp32.test:81/',
+      'esp32.laboratory_mode': true,
       'connection.auto_reconnect': false,
       'control.haptics': false,
       'appearance.reduce_motion': true,
@@ -569,6 +571,9 @@ void main() {
       final connecting = machine.connect();
       await Future<void>.delayed(Duration.zero);
       channel.incoming.add('READY');
+      for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+        channel.incoming.add('SENSOR:FC:$name:0');
+      }
       await connecting;
     });
     await tester.pumpWidget(
@@ -625,6 +630,7 @@ void main() {
   testWidgets('held movement is stopped during app disposal', (tester) async {
     SharedPreferences.setMockInitialValues({
       'connection.websocket_url': 'ws://esp32.test:81/',
+      'esp32.laboratory_mode': true,
       'connection.auto_reconnect': false,
       'control.haptics': false,
       'appearance.reduce_motion': true,
@@ -639,6 +645,9 @@ void main() {
       final connecting = machine.connect();
       await Future<void>.delayed(Duration.zero);
       channel.incoming.add('READY');
+      for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+        channel.incoming.add('SENSOR:FC:$name:0');
+      }
       await connecting;
     });
     await tester.pumpWidget(

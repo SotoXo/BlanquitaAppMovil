@@ -9,6 +9,11 @@ import '../../../shared/widgets/blanquita/blanquita_scaffold.dart';
 import '../../../shared/widgets/blanquita/blanquita_components.dart';
 import '../controller/vision_controller.dart';
 import 'vision_widgets.dart';
+import '../../../app/presentation/controller_ui_context.dart';
+import '../domain/vision_state.dart';
+import '../../../shared/widgets/thinking_indicator.dart';
+import '../../../shared/widgets/blanquita/blanquita_connection_feedback.dart';
+import '../../diagnostics/presentation/diagnostics_screen.dart';
 
 class VisionOverview extends StatelessWidget {
   const VisionOverview({super.key});
@@ -18,6 +23,11 @@ class VisionOverview extends StatelessWidget {
     final s = controller.state;
     final report = s.lastReport;
     final settings = context.watch<SettingsController>().settings;
+    final busy =
+        controller.isConnecting ||
+        controller.isDiscovering ||
+        s.connection == VisionConnection.reconnecting ||
+        (s.isConnected && !s.ready && !s.stale);
     final lowConfidence =
         report?.confidence != null &&
         report!.confidence! < settings.visionMinimumConfidence;
@@ -32,12 +42,16 @@ class VisionOverview extends StatelessWidget {
                 ? 'No hay heartbeat reciente de visión.'
                 : s.ready
                 ? 'Visión lista para operar.'
-                : 'La laptop aún no confirmó visión disponible.',
+                : busy
+                ? controller.progressMessage
+                : 'Conecta la laptop desde Conexión y acciones para recibir los datos de visión.',
             mood: s.error != null
                 ? AlfresiMood.error
                 : s.ready
                 ? AlfresiMood.success
-                : AlfresiMood.thinking,
+                : busy
+                ? AlfresiMood.thinking
+                : AlfresiMood.warning,
           ),
         const SizedBox(height: BlanquitaSpacing.sm),
         BlanquitaStatus(
@@ -47,6 +61,53 @@ class VisionOverview extends StatelessWidget {
               : BlanquitaColors.of(context).warning,
           icon: s.ready ? Icons.check_circle_outline : Icons.link_off,
         ),
+        if (busy && !(settings.assistantEnabled && settings.assistantTips)) ...[
+          const SizedBox(height: 12),
+          ThinkingIndicator(label: controller.progressMessage),
+        ],
+        if (s.error != null || s.stale) ...[
+          const SizedBox(height: 12),
+          if (!(settings.assistantEnabled && settings.assistantTips))
+            Text(
+              redactConnectionText(
+                s.error ??
+                    'La laptop dejó de responder. Revisa que siga en la misma red.',
+              ),
+            ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: controller.isConnecting
+                    ? null
+                    : () => showConnectionFeedback(
+                        context,
+                        device: 'Visión',
+                        check: () async {
+                          await controller.reconnect();
+                          return controller.state.ready;
+                        },
+                        cancel: controller.disconnect,
+                        error: () => controller.state.error,
+                        progress: controller,
+                        progressMessage: () => controller.progressMessage,
+                      ),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar conexión'),
+              ),
+              TextButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const DiagnosticsScreen(),
+                  ),
+                ),
+                icon: const Icon(Icons.monitor_heart_outlined),
+                label: const Text('Ver diagnóstico'),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: BlanquitaSpacing.lg),
         BlanquitaCard(
           child: Column(

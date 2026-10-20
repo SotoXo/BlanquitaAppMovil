@@ -38,7 +38,7 @@ class DiscoveryCollector {
       final opened = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
       if (pending.isCompleted) {
         opened.close();
-        return pending.future;
+        return await pending.future;
       }
       socket = opened;
       opened.broadcastEnabled = true;

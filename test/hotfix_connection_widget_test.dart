@@ -1,3 +1,5 @@
+import 'package:blanquita/core/network/wifi_network_controller.dart';
+import 'package:blanquita/core/network/wifi_network_service.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:blanquita/core/models/esp32_device.dart';
@@ -134,7 +136,9 @@ class _Fixture {
 
   TestVisionChannel open(Uri uri, bool visor) {
     (visor ? visionUrls : espUrls).add(uri);
-    final channel = visor || laboratory ? TestVisionChannel() : Esp32TestPeer(initialLimits: true);
+    final channel = visor || laboratory
+        ? TestVisionChannel()
+        : Esp32TestPeer(initialLimits: true);
     channels.add(channel);
     scheduleMicrotask(() {
       if (failedHosts.contains(uri.host)) {
@@ -152,6 +156,9 @@ class _Fixture {
   }
 
   Widget app({bool autoConnect = false}) => BlanquitaApp(
+    wifiController: WifiNetworkController(
+      service: WifiNetworkService(platformSupported: false),
+    ),
     settingsController: settings,
     machineController: machine,
     visionController: vision,
@@ -338,6 +345,9 @@ void main() {
           await tester.ensureVisible(find.text('URL Vision Server'));
           await tester.tap(find.text('URL Vision Server'));
         } else {
+          await tester.ensureVisible(
+            find.text('WebSocket: Sin dirección guardada'),
+          );
           await tester.tap(find.text('WebSocket: Sin dirección guardada'));
         }
         await tester.pumpAndSettle();

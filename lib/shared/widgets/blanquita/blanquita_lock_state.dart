@@ -28,10 +28,13 @@ class BlanquitaLockState extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (context.watch<SettingsController>().settings.assistantEnabled)
-            const Center(
+            Center(
               child: AlfresiAvatar(
                 size: AlfresiSizes.l,
                 mood: AlfresiMood.warning,
+                expression: critical
+                    ? AlfresiExpression.enojado
+                    : AlfresiExpression.frustrado,
               ),
             ),
           const SizedBox(height: BlanquitaSpacing.sm),
