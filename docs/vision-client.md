@@ -13,7 +13,7 @@ ahora está implementado; su contrato externo está en [vision-discovery.md](vis
 ## Arquitectura
 
 ```text
-VisionDiscoveryService (UDP 4211) → candidato → WebSocket + vision.ready
+VisionDiscoveryService (UDP 4211) → /vision → WebSocket + hello + ready + heartbeat
 Laptop WebSocket → RemoteVisionService / VisionSession
                 → VisionProtocolParser / modelos
                 → VisionController (ChangeNotifier)
@@ -29,18 +29,21 @@ controlador por separado y conserva el comportamiento de seguridad del ESP32.
 ## Conexión
 
 1. La URL manual en Ajustes → Conexión visión sigue disponible, por ejemplo
-   `ws://<IP-laptop>:8765/` o `wss://<host>/vision`. No hay IP predeterminada.
+   `ws://<IP-laptop>:8765/vision`. No hay IP predeterminada. VisionEndpoint
+   centraliza construcción y normalización; las URLs históricas con `/`,
+   `/vision/` o `/#/vision` se migran a `/vision`. No se acepta HTTP/HTTPS/WSS.
 2. Pulsar Conectar: primero URL guardada, luego discovery UDP si falla. Al iniciar
    se ejecuta este flujo aunque no haya URL persistida. Cada candidato tiene
-   timeout de 8 s para abrir el socket y recibir `vision.ready` válido.
-3. Abrir TCP/WebSocket no valida la conexión. Solo `vision.ready` del protocolo
-   correcto y versión 1 la valida; payload vacío comunica ready y `ready: false`
-   no valida. Tras conectar, `ready: false` puede revocar disponibilidad.
+   timeout de 8 s para abrir el socket y recibir hello, ready y heartbeat válidos.
+3. Abrir TCP/WebSocket no valida la conexión. Se requiere `vision.hello`, luego
+   `vision.ready` del protocolo correcto y versión 1, y después heartbeat.
+   Payload vacío comunica ready y `ready: false` no valida. Tras conectar,
+   `ready: false` puede revocar disponibilidad.
 4. Recibir JSON, validar envelope y campos conocidos, actualizar telemetría.
 5. Iniciar visor / Detener visor / Ping solo envían `vision.start`,
    `vision.stop`, `vision.ping`; no cambian la telemetría de forma optimista.
 6. Desconectar cancela los reintentos. Cambiar URL reemplaza la sesión activa y
-   limpia la telemetría anterior. Solo candidatos con `vision.ready` se persisten.
+   limpia la telemetría anterior. Solo candidatos con handshake completo se persisten.
    Buscar visor inicia por UDP; Buscar dispositivos inicia ambos controladores
    independientemente. Ningún candidato fallido reemplaza la URL manual.
 
@@ -132,8 +135,9 @@ crudos ni payload de motores mediante el API de transporte.
 ## Heartbeat, reportes y latencia
 
 - `lastHeartbeat` registra recepción local de un `vision.heartbeat` válido.
-- Hasta el primer heartbeat, el timeout empieza al conectar el socket.
-- El estado se revisa cada segundo. Tras superar el timeout, `stale = true` y
+- El primer heartbeat forma parte de la validación inicial, después de hello/ready.
+- Heartbeat del desktop cada 2 s; stale predeterminado al alcanzar 6 s.
+- El estado se revisa cada segundo. Al alcanzar el timeout, `stale = true` y
   ready efectivo es false. Se cierra la sesión y se activa recuperación con
   backoff, URL conocida y luego discovery si la URL falla.
 - Reportes/status no sustituyen al heartbeat. Un heartbeat fresco elimina stale,
@@ -168,10 +172,11 @@ SharedPreferences existentes persisten:
 | --- | --- | --- |
 | `visionWebsocketUrl` | `vision.websocket_url` | vacío |
 | `visionAutoReconnect` | `vision.auto_reconnect` | true |
-| `visionHeartbeatTimeout` | `vision.heartbeat_timeout_ms` | 5000 ms |
+| `visionHeartbeatTimeout` | `vision.heartbeat_timeout_ms` | 6000 ms |
 | `visionMinimumConfidence` | `vision.minimum_confidence` | 0.8 |
 
-Timeout permitido: 1–60 s; confianza: 0–1. La confianza mínima únicamente genera
+Timeout permitido: 6–60 s; valores guardados inferiores se migran a 6 s.
+Confianza: 0–1. La confianza mínima únicamente genera
 un aviso; no elimina reportes ni autoriza acciones físicas. Se eliminaron los
 ajustes antiguos de cámara local/FPS objetivo y las interfaces CameraFrameSource,
 VisionDetector y VisionService. PositionEstimate se conserva sin cambios.

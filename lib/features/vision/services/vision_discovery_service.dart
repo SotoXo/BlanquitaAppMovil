@@ -1,4 +1,5 @@
 import 'dart:convert';
+import '../domain/vision_endpoint.dart';
 
 import '../../../core/network/discovery_transport_stub.dart'
     if (dart.library.io) '../../../core/network/discovery_transport_io.dart';
@@ -18,7 +19,7 @@ class VisionDiscoveryService {
        );
 
   static const discoveryPort = 4211;
-  static const websocketPort = 8765;
+  static const websocketPort = VisionEndpoint.port;
   static const request = 'BLANQUITA_VISION_DISCOVER';
   static const response = 'BLANQUITA_VISION_HERE:8765';
   final DiscoveryTransport _transport;
@@ -47,11 +48,7 @@ class VisionDiscoveryService {
       octets.add(octet);
     }
     if (octets.first == 0 || octets.first >= 224) return null;
-    return Uri(
-      scheme: 'ws',
-      host: sourceAddress,
-      port: websocketPort,
-      path: '/',
-    );
+    final port = int.parse(utf8.decode(data).split(':').last);
+    return VisionEndpoint.fromHost(sourceAddress, port: port);
   }
 }

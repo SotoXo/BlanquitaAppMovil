@@ -24,6 +24,9 @@ void main() {
           if (data == 'x' && !stopped.isCompleted) stopped.complete();
         });
         socket.add('READY');
+        for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+          socket.add('SENSOR:FC:$name:0');
+        }
       });
       SharedPreferences.setMockInitialValues({
         'connection.websocket_url': 'ws://127.0.0.1:${server.port}/',
@@ -40,6 +43,11 @@ void main() {
         await machine.connect();
         expect(machine.hasValidConnection, true);
         expect(machine.isAuthorized, false);
+        final sensorDeadline = DateTime.now().add(const Duration(seconds: 2));
+        while (!machine.state.finalLimits.isComplete &&
+            DateTime.now().isBefore(sensorDeadline)) {
+          await Future<void>.delayed(const Duration(milliseconds: 2));
+        }
         expect(machine.startMovement(MovementDirection.xLeft), true);
         await Future<void>.delayed(const Duration(milliseconds: 225));
         machine.stopMovement();

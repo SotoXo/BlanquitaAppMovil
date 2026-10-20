@@ -250,8 +250,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       options: {
                         settings.visionHeartbeatTimeout:
                             '${settings.visionHeartbeatTimeout.inMilliseconds / 1000} s',
-                        const Duration(seconds: 2): '2 s',
-                        const Duration(seconds: 5): '5 s',
+                        const Duration(seconds: 6): '6 s',
                         const Duration(seconds: 10): '10 s',
                         const Duration(seconds: 30): '30 s',
                       },
@@ -405,7 +404,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             autocorrect: false,
             decoration: const InputDecoration(
               labelText: 'URL laptop',
-              hintText: 'ws://192.168.x.x:8765/',
+              hintText: 'ws://192.168.x.x:8765/vision',
               helperText: 'Deja vacío para quitar el endpoint.',
             ),
             validator: (value) =>
@@ -413,7 +412,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     value.trim().isEmpty ||
                     RemoteVisionService.isValidUrl(value)
                 ? null
-                : 'Introduce una URL ws:// o wss:// válida.',
+                : 'Usa ws://HOST:PUERTO/vision sin query ni fragmento.',
           ),
         ),
         actions: [

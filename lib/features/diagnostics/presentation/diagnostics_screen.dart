@@ -7,6 +7,7 @@ import '../../../core/models/machine_state.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../../../shared/widgets/app_background.dart';
 import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/final_limits_panel.dart';
 import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/status_widgets.dart';
@@ -54,6 +55,15 @@ class DiagnosticsScreen extends StatelessWidget {
                       child: _TransportConsole(machine: machine, state: state),
                     ),
                     const SizedBox(height: 14),
+                    GlassPanel(
+                      child: FinalLimitsPanel(
+                        limits: state.finalLimits,
+                        awaitingRelease:
+                            machine.awaitingMovementRelease &&
+                            state.activeMovement == null,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     LayoutBuilder(
                       builder: (context, constraints) {
                         final compact = constraints.maxWidth < 680;
@@ -67,7 +77,7 @@ class DiagnosticsScreen extends StatelessWidget {
                               'Detectado',
                               'Libre',
                             ),
-                            'Final de carrera': _boolLabel(
+                            'Resumen de finales': _boolLabel(
                               state.finalLimitActive,
                               'Activado',
                               'Libre',
@@ -132,6 +142,14 @@ class DiagnosticsScreen extends StatelessWidget {
                                 : vision.endpoint),
                         'Dirección detectada': vision.detectedAddress ?? '—',
                         'Discovery': vision.discoveryStatusLabel,
+                        'Puerto detectado':
+                            vision.detectedPort?.toString() ?? '—',
+                        'Estado interno': vision.networkPhase.label,
+                        'Intento WebSocket': vision.connectionAttempt
+                            .toString(),
+                        'Última excepción': vision.lastFailure?.summary ?? '—',
+                        'HTTP handshake':
+                            vision.lastFailure?.httpStatus?.toString() ?? '—',
                         'Conexión': visionConnectionLabel(vs),
                         'Ready': vs.ready ? 'Sí' : 'No',
                         'Último mensaje': vs.lastMessage ?? '—',
@@ -155,6 +173,21 @@ class DiagnosticsScreen extends StatelessWidget {
                       },
                     ),
                     const SizedBox(height: 14),
+                    SwitchListTile.adaptive(
+                      title: const Text(
+                        'Diagnóstico sin reconexión automática',
+                      ),
+                      subtitle: const Text(
+                        'Conserva el primer error. Usa Conectar para repetir la prueba.',
+                      ),
+                      value: vision.diagnosticMode,
+                      onChanged: vision.setDiagnosticMode,
+                    ),
+                    if (vision.firstFailure != null)
+                      GlassPanel(
+                        child: SelectableText(vision.firstFailure.toString()),
+                      ),
+                    const SizedBox(height: 14),
                     GlassPanel(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -169,7 +202,7 @@ class DiagnosticsScreen extends StatelessWidget {
                           for (final entry in vision.diagnostics.take(20))
                             Padding(
                               padding: const EdgeInsets.only(bottom: 8),
-                              child: Text(
+                              child: SelectableText(
                                 entry,
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),

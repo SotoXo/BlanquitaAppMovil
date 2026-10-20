@@ -13,7 +13,7 @@ void main() {
           utf8.encode(VisionDiscoveryService.response),
           sender,
         ).toString(),
-        'ws://$sender:8765/',
+        'ws://$sender:8765/vision',
       );
       expect(
         VisionDiscoveryService.parseResponse(
@@ -85,7 +85,7 @@ void main() {
       utf8.encode('BLANQUITA_VISION_HERE:8765'),
       '192.168.43.27',
     );
-    expect(uri.toString(), 'ws://192.168.43.27:8765/');
+    expect(uri.toString(), 'ws://192.168.43.27:8765/vision');
     expect(VisionDiscoveryService.discoveryPort, 4211);
     // No assumption about a /24 subnet or a fixed hotspot address.
     expect(
@@ -177,7 +177,10 @@ void main() {
         });
       });
       try {
-        expect((await service.discover()).toString(), 'ws://127.0.0.1:8765/');
+        expect(
+          (await service.discover()).toString(),
+          'ws://127.0.0.1:8765/vision',
+        );
         expect(received, ['BLANQUITA_VISION_DISCOVER']);
       } finally {
         service.dispose();

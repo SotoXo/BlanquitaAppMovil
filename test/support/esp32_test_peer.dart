@@ -47,6 +47,7 @@ class Esp32TestPeer extends TestVisionChannel {
     this.reply = true,
     this.busy = false,
     this.badProof = false,
+    this.initialLimits = false,
   }) {
     _sink = _PeerSink(this);
   }
@@ -55,6 +56,7 @@ class Esp32TestPeer extends TestVisionChannel {
   final bool reply;
   final bool busy;
   final bool badProof;
+  final bool initialLimits;
   late final TestVisionSink _sink;
   @override
   TestVisionSink get sink => _sink;
@@ -109,6 +111,14 @@ class Esp32TestPeer extends TestVisionChannel {
           'sessionId': sessionId,
           'proof': sign(hex(secret), 'BLANQUITA_V2|ready|$transcript'),
         });
+        if (initialLimits) {
+          scheduleMicrotask(() {
+            if (sink.closed) return;
+            for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+              event('SENSOR:FC:$name:0');
+            }
+          });
+        }
       case 'command.v2':
         if (!authorized ||
             frame['sessionId'] != sessionId ||

@@ -14,6 +14,12 @@ void main() {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       final peer = Completer<WebSocket>();
       final serverSubscription = server.listen((request) async {
+        expect(request.uri.path, '/vision');
+        if (request.uri.path != '/vision') {
+          request.response.statusCode = HttpStatus.notFound;
+          await request.response.close();
+          return;
+        }
         peer.complete(await WebSocketTransformer.upgrade(request));
       });
       final service = RemoteVisionService();
@@ -71,8 +77,14 @@ void main() {
   test(
     'URL accepts configurable ws/wss endpoints and rejects invalid input',
     () {
-      expect(RemoteVisionService.isValidUrl('ws://192.168.10.20:8765/'), true);
-      expect(RemoteVisionService.isValidUrl('wss://laptop.local/vision'), true);
+      expect(
+        RemoteVisionService.isValidUrl('ws://192.168.10.20:8765/vision'),
+        true,
+      );
+      expect(
+        RemoteVisionService.isValidUrl('wss://laptop.local/vision'),
+        false,
+      );
       for (final value in [
         '',
         'http://laptop.local',

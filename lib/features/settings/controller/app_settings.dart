@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/models/esp32_device.dart';
+import '../../vision/domain/vision_endpoint.dart';
 
 enum GlassIntensity { low, medium, high }
 
@@ -22,7 +23,7 @@ class AppSettings {
     this.visualSensitivity = 0.65,
     this.visionWebsocketUrl = '',
     this.visionAutoReconnect = true,
-    this.visionHeartbeatTimeout = const Duration(seconds: 5),
+    this.visionHeartbeatTimeout = VisionEndpoint.heartbeatTimeout,
     this.visionMinimumConfidence = 0.8,
   });
 

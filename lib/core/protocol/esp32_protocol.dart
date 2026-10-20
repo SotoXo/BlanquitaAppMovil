@@ -1,3 +1,5 @@
+import '../models/machine_state.dart';
+
 enum Esp32Command {
   moveLeft('a', 'Mover X a la izquierda'),
   moveRight('d', 'Mover X a la derecha'),
@@ -31,6 +33,8 @@ enum Esp32MessageType {
   sequenceCompleted,
   plateSensor,
   finalLimitSensor,
+  directionalLimitSensor,
+  directionalLimitReached,
   sensorSnapshot,
   finalLimitError,
   sequenceActiveError,
@@ -47,6 +51,7 @@ class Esp32Message {
     this.detail,
     this.plateDetected,
     this.finalLimitActive,
+    this.finalLimit,
   });
 
   final Esp32MessageType type;
@@ -56,6 +61,7 @@ class Esp32Message {
   final String? detail;
   final bool? plateDetected;
   final bool? finalLimitActive;
+  final FinalLimit? finalLimit;
 }
 
 class Esp32MessageParser {
@@ -93,6 +99,36 @@ class Esp32MessageParser {
           type: Esp32MessageType.sequenceActiveError,
           raw: raw,
         );
+    }
+
+    final directionalMatch = RegExp(
+      r'^SENSOR:FC:(X_IZQ|X_DER|Z_ARRIBA|Z_ABAJO):([01])$',
+    ).firstMatch(raw);
+    if (directionalMatch != null) {
+      return Esp32Message(
+        type: Esp32MessageType.directionalLimitSensor,
+        raw: raw,
+        finalLimit: FinalLimit.values.firstWhere(
+          (limit) => limit.protocolName == directionalMatch.group(1),
+        ),
+        booleanValue: directionalMatch.group(2) == '1',
+      );
+    }
+
+    final reachedLimit = switch (raw) {
+      'LIMITE:FINAL_X_IZQUIERDA' => FinalLimit.xIzquierda,
+      'LIMITE:FINAL_X_DERECHA' => FinalLimit.xDerecha,
+      'LIMITE:FINAL_Z_ARRIBA' => FinalLimit.zArriba,
+      'LIMITE:FINAL_Z_ABAJO' => FinalLimit.zAbajo,
+      _ => null,
+    };
+    if (reachedLimit != null) {
+      return Esp32Message(
+        type: Esp32MessageType.directionalLimitReached,
+        raw: raw,
+        finalLimit: reachedLimit,
+        booleanValue: true,
+      );
     }
 
     final plateMatch = RegExp(r'^SENSOR:PLATO:([01])$').firstMatch(raw);

@@ -64,6 +64,10 @@ class MachineController extends ChangeNotifier {
   bool _inactive = false;
   bool _manualControlsLocked = false;
   bool _disposed = false;
+  int _nextPressId = 0;
+  int? _heldPressId;
+  int? _heldPressSocket;
+  MovementDirection? _heldDirection;
 
   MachineState get state => _state;
   List<MachineEvent> get events => List.unmodifiable(_events);
@@ -109,23 +113,35 @@ class MachineController extends ChangeNotifier {
       ? 'Error'
       : 'Desconectado';
 
-  bool get canStartMovement =>
+  bool get awaitingMovementRelease => _heldPressId != null;
+
+  bool canMove(MovementDirection direction) =>
+      !_disposed &&
+      !_inactive &&
       hasValidConnection &&
       !_state.sequenceActive &&
       _state.activeMovement == null &&
-      _state.finalLimitActive != true &&
-      !_manualControlsLocked;
+      !awaitingMovementRelease &&
+      !_manualControlsLocked &&
+      _state.finalLimits.isComplete &&
+      !_state.finalLimits.blocks(direction);
+
+  bool get canStartMovement => MovementDirection.values.any(canMove);
 
   bool get canUseAuxiliaryControls =>
+      !_inactive &&
       hasValidConnection &&
       !_state.sequenceActive &&
       _state.activeMovement == null;
 
   bool get canStartSequence =>
+      !_inactive &&
       hasValidConnection &&
       !_state.sequenceActive &&
       _state.activeMovement == null &&
-      _state.finalLimitActive != true;
+      !awaitingMovementRelease &&
+      _state.finalLimits.isComplete &&
+      !_state.finalLimits.anyActive;
 
   Future<void> connect() async {
     if (_disposed ||
@@ -263,6 +279,7 @@ class MachineController extends ChangeNotifier {
       sequenceStepLabel: null,
       plateDetected: null,
       finalLimitActive: null,
+      finalLimits: const FinalLimitsState(),
       lastSensorPacket: null,
       lastStatus: 'Conectando al ESP32…',
       connectionError: null,
@@ -442,6 +459,7 @@ class MachineController extends ChangeNotifier {
           : 'Verificando identidad V2…',
       plateDetected: null,
       finalLimitActive: null,
+      finalLimits: const FinalLimitsState(),
       lastSensorPacket: null,
       sequence: SequencePhase.idle,
       sequenceStep: null,
@@ -542,6 +560,12 @@ class MachineController extends ChangeNotifier {
     _channel = null;
     _session = null;
     _laboratoryReady = false;
+    _state = _state.copyWith(
+      finalLimits: const FinalLimitsState(),
+      finalLimitActive: null,
+      plateDetected: null,
+      lastSensorPacket: null,
+    );
     if (subscription != null) {
       unawaited(_ignoreCloseError(subscription.cancel()));
     }
@@ -572,6 +596,10 @@ class MachineController extends ChangeNotifier {
     _state = _state.copyWith(
       connection: ConnectionPhase.disconnected,
       activeMovement: null,
+      finalLimitActive: null,
+      finalLimits: const FinalLimitsState(),
+      plateDetected: null,
+      lastSensorPacket: null,
       sequence: SequencePhase.idle,
       sequenceStep: null,
       sequenceStepLabel: null,
@@ -591,11 +619,19 @@ class MachineController extends ChangeNotifier {
     await connect();
   }
 
-  bool startMovement(MovementDirection movement) {
-    if (!canStartMovement) return false;
+  bool startMovement(MovementDirection movement) =>
+      beginMovement(movement) != null;
+
+  /// A press outlives a firmware STOP. Its owner must release this exact token.
+  int? beginMovement(MovementDirection movement) {
+    if (!canMove(movement)) return null;
 
     final command = _commandForMovement(movement);
-    if (!_transmit(command)) return false;
+    if (!_transmit(command)) return null;
+    final pressId = ++_nextPressId;
+    _heldPressId = pressId;
+    _heldPressSocket = _socketGeneration;
+    _heldDirection = movement;
 
     _state = _state.copyWith(
       activeMovement: movement,
@@ -605,19 +641,30 @@ class MachineController extends ChangeNotifier {
     _startHeartbeat();
     unawaited(_haptics.movementStart());
     notifyListeners();
-    return true;
+    return pressId;
   }
 
   void stopMovement([MovementDirection? movement]) {
-    final active = _state.activeMovement;
-    if (active == null || (movement != null && movement != active)) return;
+    if (movement != null && movement != _heldDirection) return;
+    final pressId = _heldPressId;
+    if (pressId != null) releaseMovement(pressId);
+  }
+
+  void releaseMovement(int pressId) {
+    if (_disposed || _heldPressId != pressId) return;
+    final sameSocket = _heldPressSocket == _socketGeneration;
+    _heldPressId = null;
+    _heldPressSocket = null;
+    _heldDirection = null;
 
     _stopHeartbeat();
     _state = _state.copyWith(
       activeMovement: null,
       lastStatus: 'Motor detenido',
     );
-    if (_state.isConnected) _transmit(Esp32Command.stop);
+    // The firmware's exigeSoltarFlutter latch needs x even after its own STOP.
+    // A release from a closed socket must never send into a replacement session.
+    if (sameSocket) _transmit(Esp32Command.stop);
     _addEvent('Movimiento detenido');
     unawaited(_haptics.movementStop());
     notifyListeners();
@@ -714,14 +761,12 @@ class MachineController extends ChangeNotifier {
   void handleAppInactive() {
     if (_disposed || _inactive) return;
     _inactive = true;
+    _stopHeartbeat();
     if (_state.activeMovement != null) {
-      stopMovement();
       _addEvent(
         'Movimiento detenido por cambio de estado de la app',
         MachineEventLevel.warning,
       );
-    } else {
-      _stopHeartbeat();
     }
     // WiFi settings can leave a TCP socket apparently alive on an old network.
     // Suspend it after STOP, retaining the user's reconnect/disconnect intent.
@@ -836,7 +881,12 @@ class MachineController extends ChangeNotifier {
       case Esp32MessageType.plateSensor:
         _setPlate(message.booleanValue == true);
       case Esp32MessageType.finalLimitSensor:
+        _state = _state.copyWith(lastSensorPacket: message.raw);
         _setFinalLimit(message.booleanValue == true);
+      case Esp32MessageType.directionalLimitSensor:
+      case Esp32MessageType.directionalLimitReached:
+        _state = _state.copyWith(lastSensorPacket: message.raw);
+        _setDirectionalLimit(message.finalLimit!, message.booleanValue == true);
       case Esp32MessageType.sensorSnapshot:
         _state = _state.copyWith(lastSensorPacket: message.raw);
         _setPlate(message.plateDetected == true);
@@ -898,6 +948,11 @@ class MachineController extends ChangeNotifier {
   }
 
   void _setFinalLimit(bool active, {bool addEvent = true}) {
+    // Preserve legacy telemetry without overriding authoritative individual data.
+    if (_state.finalLimits.isComplete) {
+      _state = _state.copyWith(finalLimitActive: active);
+      return;
+    }
     final wasActive = _state.finalLimitActive == true;
     if (active) {
       _stopHeartbeat();
@@ -923,6 +978,34 @@ class MachineController extends ChangeNotifier {
         active ? 'FINAL DE CARRERA ACTIVADO' : 'Final de carrera liberado',
         active ? MachineEventLevel.critical : MachineEventLevel.success,
       );
+    }
+  }
+
+  void _setDirectionalLimit(FinalLimit limit, bool active) {
+    final previous = _state.finalLimits[limit];
+    final reading = active ? LimitSwitchStatus.active : LimitSwitchStatus.free;
+    if (previous == reading) return;
+    final limits = _state.finalLimits.withReading(limit, reading);
+    final movement = _state.activeMovement;
+    final mustStop = movement != null && limits.blocks(movement);
+    if (mustStop) _stopHeartbeat();
+    _state = _state.copyWith(
+      finalLimits: limits,
+      activeMovement: mustStop ? null : movement,
+      lastStatus: limits.axisFault(limit.direction)
+          ? 'Fallo de sensores: ambos extremos del eje ${limit.direction.axis} activados'
+          : active
+          ? limit.retreatMessage
+          : '${limit.label}: libre',
+    );
+    _addEvent(
+      '${limit.label}: ${reading.label}',
+      active ? MachineEventLevel.warning : MachineEventLevel.success,
+    );
+    if (previous == LimitSwitchStatus.free &&
+        active &&
+        _settings.settings.strongLimitFeedback) {
+      unawaited(_haptics.critical());
     }
   }
 
@@ -997,6 +1080,10 @@ class MachineController extends ChangeNotifier {
           ? ConnectionPhase.error
           : ConnectionPhase.disconnected,
       activeMovement: null,
+      finalLimitActive: null,
+      finalLimits: const FinalLimitsState(),
+      plateDetected: null,
+      lastSensorPacket: null,
       sequence: SequencePhase.idle,
       sequenceStep: null,
       sequenceStepLabel: null,
@@ -1015,7 +1102,9 @@ class MachineController extends ChangeNotifier {
     final seconds = math.min(2 << _reconnectAttempt.clamp(0, 3), 15);
     _reconnectAttempt++;
     _reconnectTimer = Timer(Duration(seconds: seconds), () {
-      if (!_disposed && !_manualDisconnect && _settings.settings.autoReconnect) {
+      if (!_disposed &&
+          !_manualDisconnect &&
+          _settings.settings.autoReconnect) {
         connect();
       }
     });
@@ -1052,7 +1141,9 @@ class MachineController extends ChangeNotifier {
         (_session?.authorized == true ||
             (_laboratoryReady && laboratoryEnabled));
     if (!validated ||
-        (_state.activeMovement == null && !_state.sequenceActive)) {
+        (_state.activeMovement == null &&
+            !_state.sequenceActive &&
+            !awaitingMovementRelease)) {
       return;
     }
     try {

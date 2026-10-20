@@ -73,15 +73,17 @@ class SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Row(
     children: [
-      Text(
-        label,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-          color: Theme.of(
-            context,
-          ).colorScheme.onSurface.withValues(alpha: 0.64),
+      Expanded(
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.64),
+          ),
         ),
       ),
-      if (trailing != null) ...[const Spacer(), trailing!],
+      if (trailing != null) ...[const SizedBox(width: 8), trailing!],
     ],
   );
 }

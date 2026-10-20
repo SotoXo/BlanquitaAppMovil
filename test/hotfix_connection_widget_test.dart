@@ -21,6 +21,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'features/vision/support/vision_test_channel.dart';
 import 'features/vision/support/vision_test_discovery.dart';
 
+Future<void> _pumpConnections(WidgetTester tester, _Fixture fixture) async {
+  for (var i = 0; i < 60; i++) {
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 5)),
+    );
+    await tester.pump();
+    if (fixture.machine.state.isConnected &&
+        fixture.vision.state.ready &&
+        !fixture.vision.isConnecting) {
+      return;
+    }
+  }
+  fail('Connections did not finish their asynchronous transport cleanup');
+}
+
 class _Discovery extends Esp32DiscoveryService {
   Future<Uri?> Function() result = () async => null;
   int calls = 0;
@@ -119,15 +134,18 @@ class _Fixture {
 
   TestVisionChannel open(Uri uri, bool visor) {
     (visor ? visionUrls : espUrls).add(uri);
-    final channel = visor || laboratory ? TestVisionChannel() : Esp32TestPeer();
+    final channel = visor || laboratory ? TestVisionChannel() : Esp32TestPeer(initialLimits: true);
     channels.add(channel);
     scheduleMicrotask(() {
       if (failedHosts.contains(uri.host)) {
         channel.incoming.addError(StateError('DHCP changed'));
       } else if (visor) {
-        channel.receive('vision.ready', DateTime.now());
+        channel.establish(DateTime.now());
       } else if (laboratory) {
         channel.incoming.add('READY');
+        for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+          channel.incoming.add('SENSOR:FC:$name:0');
+        }
       }
     });
     return channel;
@@ -213,18 +231,18 @@ void main() {
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
       await tester.pump();
       f.espDiscovery.result = () async => Uri.parse('ws://192.168.137.209:81/');
-      f.findVision = () async => Uri.parse('ws://192.168.137.115:8765/');
+      f.findVision = () async => Uri.parse('ws://192.168.137.115:8765/vision');
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpAndSettle();
       oldEsp.complete(Uri.parse('ws://10.0.28.209:81/'));
-      oldVision.complete(Uri.parse('ws://10.0.28.115:8765/'));
+      oldVision.complete(Uri.parse('ws://10.0.28.115:8765/vision'));
       await tester.pumpAndSettle();
       expect(f.espUrls.map((u) => u.host), ['192.168.137.209']);
       expect(f.visionUrls.map((u) => u.host), ['192.168.137.115']);
       expect(f.settings.settings.websocketUrl, 'ws://192.168.137.209:81/');
       expect(
         f.settings.settings.visionWebsocketUrl,
-        'ws://192.168.137.115:8765/',
+        'ws://192.168.137.115:8765/vision',
       );
       expect(f.machine.state.isConnected, true);
       expect(f.vision.state.ready, true);
@@ -239,10 +257,10 @@ void main() {
       final f = _Fixture();
       await f.load(
         esp: 'ws://10.0.28.209:81/',
-        visor: 'ws://10.0.28.115:8765/',
+        visor: 'ws://10.0.28.115:8765/vision',
       );
       f.espDiscovery.result = () async => Uri.parse('ws://192.168.137.209:81/');
-      f.findVision = () async => Uri.parse('ws://192.168.137.115:8765/');
+      f.findVision = () async => Uri.parse('ws://192.168.137.115:8765/vision');
       f.failedHosts.add('192.168.137.115');
       await tester.pumpWidget(f.app());
       await tester.pumpAndSettle();
@@ -256,7 +274,10 @@ void main() {
       expect(f.espDiscovery.calls, 1);
       expect(f.visionDiscovery.calls, 1);
       expect(f.vision.state.isConnected, false);
-      expect(f.settings.settings.visionWebsocketUrl, 'ws://10.0.28.115:8765/');
+      expect(
+        f.settings.settings.visionWebsocketUrl,
+        'ws://10.0.28.115:8765/vision',
+      );
       expect(f.machine.startMovement(MovementDirection.zUp), true);
       expect(f.channels.whereType<Esp32TestPeer>().first.commands, ['w']);
       f.machine.stopMovement();
@@ -276,7 +297,9 @@ void main() {
         await tester.pumpWidget(f.app());
         await tester.pumpAndSettle();
         final saving = visor
-            ? f.vision.saveEndpointAndReconnect('ws://192.168.137.115:8765/')
+            ? f.vision.saveEndpointAndReconnect(
+                'ws://192.168.137.115:8765/vision',
+              )
             : f.machine.saveEndpointAndReconnect('ws://192.168.137.209:81/');
         await tester.pump();
         if (visor) {
@@ -319,7 +342,7 @@ void main() {
         }
         await tester.pumpAndSettle();
         final url = visor
-            ? 'ws://192.168.137.115:8765/'
+            ? 'ws://192.168.137.115:8765/vision'
             : 'ws://192.168.137.209:81/';
         await tester.enterText(find.byType(TextField), url);
         await tester.tap(find.text('Guardar'));
@@ -410,12 +433,12 @@ void main() {
       await tester.pump();
       expect(f.machine.state.isConnected, true);
       expect(f.vision.isDiscovering, true);
-      visor.complete(Uri.parse('ws://192.168.137.115:8765/'));
+      visor.complete(Uri.parse('ws://192.168.137.115:8765/vision'));
       await tester.pumpAndSettle();
       expect(f.settings.settings.websocketUrl, 'ws://192.168.137.209:81/');
       expect(
         f.settings.settings.visionWebsocketUrl,
-        'ws://192.168.137.115:8765/',
+        'ws://192.168.137.115:8765/vision',
       );
       expect(f.vision.state.ready, true);
       expect(tester.takeException(), isNull);
@@ -429,13 +452,14 @@ void main() {
       final f = _Fixture();
       await f.load(
         esp: 'ws://10.0.28.209:81/',
-        visor: 'ws://10.0.28.115:8765/',
+        visor: 'ws://10.0.28.115:8765/vision',
       );
       f.failedHosts.addAll(['10.0.28.209', '10.0.28.115']);
       f.espDiscovery.result = () async => Uri.parse('ws://192.168.137.209:81/');
-      f.findVision = () async => Uri.parse('ws://192.168.137.115:8765/');
+      f.findVision = () async => Uri.parse('ws://192.168.137.115:8765/vision');
       await tester.pumpWidget(f.app(autoConnect: true));
       await tester.pump(const Duration(milliseconds: 450));
+      await _pumpConnections(tester, f);
       await tester.pumpAndSettle();
       expect(f.espUrls.map((u) => u.host), ['10.0.28.209', '192.168.137.209']);
       expect(f.visionUrls.map((u) => u.host), [
@@ -447,7 +471,7 @@ void main() {
       expect(f.settings.settings.websocketUrl, 'ws://192.168.137.209:81/');
       expect(
         f.settings.settings.visionWebsocketUrl,
-        'ws://192.168.137.115:8765/',
+        'ws://192.168.137.115:8765/vision',
       );
       expect(tester.takeException(), isNull);
       await f.close(tester);
@@ -460,7 +484,7 @@ void main() {
       final f = _Fixture();
       await f.load(
         esp: 'ws://10.0.28.209:81/',
-        visor: 'ws://10.0.28.115:8765/',
+        visor: 'ws://10.0.28.115:8765/vision',
         retry: true,
       );
       await tester.pumpWidget(f.app(autoConnect: true));
@@ -490,15 +514,19 @@ void main() {
           Uri.parse(f.settings.settings.visionWebsocketUrl).host,
         ]);
         f.espDiscovery.result = () async => Uri.parse('ws://${pair[0]}:81/');
-        f.findVision = () async => Uri.parse('ws://${pair[1]}:8765/');
+        f.findVision = () async => Uri.parse('ws://${pair[1]}:8765/vision');
         tester.binding.handleAppLifecycleStateChanged(
           AppLifecycleState.resumed,
         );
+        await _pumpConnections(tester, f);
         await tester.pumpAndSettle();
         expect(f.machine.state.isConnected, true);
         expect(f.vision.state.ready, true);
         expect(f.settings.settings.websocketUrl, 'ws://${pair[0]}:81/');
-        expect(f.settings.settings.visionWebsocketUrl, 'ws://${pair[1]}:8765/');
+        expect(
+          f.settings.settings.visionWebsocketUrl,
+          'ws://${pair[1]}:8765/vision',
+        );
         expect(tester.widget<MaterialApp>(find.byType(MaterialApp)), same(app));
         expect(tester.state(find.byType(Navigator)), same(navigator));
         expect(tester.state(find.byType(MainShell)), same(shell));
@@ -508,7 +536,7 @@ void main() {
         await tester.pump();
       }
       await f.machine.disconnect();
-      await f.vision.disconnect();
+      await tester.runAsync(() => f.vision.disconnect());
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pump(const Duration(seconds: 30));
       expect(f.espDiscovery.calls, 3);

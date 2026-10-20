@@ -9,18 +9,19 @@ El contrato JSON v1 existente de [vision-client.md](vision-client.md) se conserv
 ```text
 Inicio / Conectar / Reconectar
   → probar visionWebsocketUrl persistida
-  → abrir WebSocket y esperar vision.ready válido (hasta 8 s)
+  → abrir WebSocket /vision y esperar hello + ready + heartbeat (hasta 8 s)
   → si falla: broadcast UDP 4211 (hasta 3 s / 3 solicitudes)
   → candidato desde IP origen del datagrama
-  → abrir WebSocket candidato :8765 y exigir vision.ready (hasta 8 s)
+  → abrir ws://IP-origen:8765/vision y exigir hello + ready + heartbeat (hasta 8 s)
   → si valida: usar la sesión y persistir la nueva URL
   → si falla: conservar URL manual y mostrar estado/error
   → con auto-reconnect: repetir ciclo tras backoff 1/2/4/8/16/30 s
 ```
 
 Una sesión se marca conectada únicamente después de abrir el transporte y recibir
-`vision.ready` válido. `vision.hello`, `vision.status` con ready=true, un heartbeat,
-una respuesta UDP y un WebSocket abierto no sustituyen este handshake. `ready:false`
+`vision.hello`, `vision.ready` válido y después `vision.heartbeat`.
+`vision.status` con ready=true, una respuesta UDP y un WebSocket abierto no
+sustituyen este handshake. `ready:false`
 no valida. Los mensajes requieren protocolo, versión, ID, timestamp y payload
 correctos. Una confirmación tardía de una sesión cancelada se ignora.
 
@@ -30,7 +31,7 @@ no cancela la otra. Buscar ESP32 conserva el comportamiento de seguridad existen
 de MachineController. El módulo Vision nunca llama a MachineController.
 
 La pérdida de heartbeat también cierra la sesión de visión y activa recuperación
-con backoff. Se utiliza el timeout configurado (5 s predeterminado, 1–60 s);
+con backoff. Se utiliza el timeout configurado (6 s predeterminado, 6–60 s);
 el estado se revisa cada segundo. La reconexión usa primero la URL conocida y
 después discovery, permitiendo cambiar entre redes 172.20.10.x, 10.42.193.x y
 192.168.137.x sin escaneo de subredes o puertos. El contador de backoff se reinicia
@@ -60,7 +61,7 @@ no al 4211 del móvil. Ignorar cualquier solicitud cuyo contenido no sea exacto.
 No incluir IP, URL, JSON u otros campos en la respuesta.
 
 Ejemplo: un datagrama válido recibido por Flutter desde `192.168.137.115`
-produce `ws://192.168.137.115:8765/`. La IP se toma exclusivamente del remitente
+produce `ws://192.168.137.115:8765/vision`. La IP se toma exclusivamente del remitente
 del datagrama, jamás del contenido. La respuesta anuncia un candidato y no
 demuestra disponibilidad del servidor.
 
@@ -72,10 +73,11 @@ en el loop. Cerrar el transporte UDP durante el apagado del servidor.
 
 ### 2. WebSocket en TCP 8765
 
-Escuchar en `0.0.0.0:8765` o en la IP LAN accesible y aceptar la ruta `/`.
+El contrato existente escucha en `0.0.0.0:8765` o en la IP LAN accesible y acepta
+exactamente la ruta `/vision`. Esta corrección solo modifica Mobile.
 `127.0.0.1` como única interfaz no permite acceso desde el teléfono. Discovery
-anuncia específicamente el endpoint `ws://<remitente>:8765/`; una configuración
-manual puede usar otra ruta o wss, pero no cambia el anuncio UDP de esta versión.
+anuncia específicamente el endpoint `ws://<remitente>:8765/vision`; una configuración
+manual usa el mismo constructor y contrato, sin otra ruta ni fragmento.
 
 Al aceptar **cada** cliente, enviar en orden:
 
@@ -135,7 +137,7 @@ disponibles. Los modelos y validaciones de reportes permanecen iguales.
 ### 4. Heartbeat y comandos del móvil
 
 Enviar heartbeat desde que se conecta el cliente, incluso si el detector está
-detenido. Se recomienda cada **500 ms**, menor al timeout mínimo de 1 s. No hacer
+detenido. El contrato fija un heartbeat cada **2 s**, con stale a los **6 s**. No hacer
 depender heartbeat de frames, detecciones, cámara o comandos `vision.start`.
 Enviar con envelope v1 y type=`vision.heartbeat`, payload `{}`.
 
@@ -176,7 +178,7 @@ Reutiliza únicamente DiscoveryTransport genérico, con instancia y ciclo de vid
 propios. Esp32DiscoveryService y MachineController no se modifican. El parser,
 modelos, comandos físicos y contrato JSON existentes tampoco se modifican.
 
-Controlador: valida transporte + ready, ordena URL/discovery, persiste solo tras
+Controlador: valida transporte + hello + ready + heartbeat, ordena URL/discovery, persiste solo tras
 validación y gestiona backoff, timeout, cancelación y sesiones obsoletas.
 Ajustes muestra estado, dirección detectada, URL y Buscar visor, conservando el
 panel ESP32. Visión y Diagnósticos reflejan endpoint y estado de discovery.

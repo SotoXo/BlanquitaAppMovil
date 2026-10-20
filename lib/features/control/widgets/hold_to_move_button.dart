@@ -14,6 +14,7 @@ class HoldToMoveButton extends StatefulWidget {
     required this.label,
     required this.enabled,
     required this.active,
+    this.limitBlocked = false,
   });
 
   final MovementDirection movement;
@@ -21,6 +22,7 @@ class HoldToMoveButton extends StatefulWidget {
   final String label;
   final bool enabled;
   final bool active;
+  final bool limitBlocked;
 
   @override
   State<HoldToMoveButton> createState() => _HoldToMoveButtonState();
@@ -29,6 +31,8 @@ class HoldToMoveButton extends StatefulWidget {
 class _HoldToMoveButtonState extends State<HoldToMoveButton> {
   MachineController? _machine;
   int? _pointer;
+  int? _pressId;
+  MachineController? _pressMachine;
 
   @override
   void didChangeDependencies() {
@@ -37,25 +41,35 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
   }
 
   void _onDown(PointerDownEvent event) {
-    if (!widget.enabled || _pointer != null) return;
-    if (_machine?.startMovement(widget.movement) == true) {
+    if (!widget.enabled || widget.limitBlocked || _pointer != null) return;
+    final pressId = _machine?.beginMovement(widget.movement);
+    if (pressId != null) {
       _pointer = event.pointer;
+      _pressId = pressId;
+      _pressMachine = _machine;
     }
   }
 
   void _release(PointerEvent event) {
     if (_pointer != event.pointer) return;
     _pointer = null;
-    _machine?.stopMovement(widget.movement);
+    final pressId = _pressId;
+    _pressId = null;
+    if (pressId != null) _pressMachine?.releaseMovement(pressId);
+    _pressMachine = null;
   }
 
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsController>().settings;
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final duration = settings.reduceMotion || settings.performanceMode
         ? Duration.zero
         : const Duration(milliseconds: 155);
-    final foreground = widget.active
+    final foreground = widget.limitBlocked
+        ? AppColors.danger
+        : widget.active
         ? const Color(0xFF031419)
         : widget.enabled
         ? Theme.of(context).colorScheme.onSurface
@@ -63,8 +77,11 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
 
     return Semantics(
       button: true,
-      enabled: widget.enabled,
-      label: '${widget.label}. Mantener pulsado para mover.',
+      excludeSemantics: true,
+      enabled: widget.enabled && !widget.limitBlocked,
+      label: widget.limitBlocked
+          ? '${widget.label}. Bloqueada por final de carrera.'
+          : '${widget.label}. Mantener pulsado para mover.',
       child: Listener(
         behavior: HitTestBehavior.opaque,
         onPointerDown: _onDown,
@@ -84,7 +101,12 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: widget.active
+                colors: widget.limitBlocked
+                    ? [
+                        AppColors.danger.withValues(alpha: 0.7),
+                        AppColors.danger.withValues(alpha: 0.15),
+                      ]
+                    : widget.active
                     ? [AppColors.cyan, AppColors.cyanDeep]
                     : [
                         Colors.white.withValues(
@@ -109,12 +131,17 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(21.8),
-                color: widget.active
+                color: widget.limitBlocked
+                    ? AppColors.danger.withValues(alpha: 0.12)
+                    : widget.active
                     ? AppColors.cyan
                     : widget.enabled
-                    ? AppColors.graphiteRaised.withValues(alpha: 0.92)
-                    : AppColors.graphite.withValues(alpha: 0.72),
-                gradient: widget.active
+                    ? (isDark ? AppColors.graphiteRaised : scheme.surface)
+                          .withValues(alpha: 0.92)
+                    : (isDark ? AppColors.graphite : scheme.surface).withValues(
+                        alpha: 0.72,
+                      ),
+                gradient: widget.active || widget.limitBlocked
                     ? null
                     : LinearGradient(
                         begin: Alignment.topLeft,
@@ -123,12 +150,23 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
                           Colors.white.withValues(
                             alpha: widget.enabled ? 0.055 : 0.018,
                           ),
-                          AppColors.graphite.withValues(alpha: 0.90),
+                          (isDark ? AppColors.graphite : scheme.surface)
+                              .withValues(alpha: 0.90),
                         ],
                       ),
               ),
               child: Stack(
                 children: [
+                  if (widget.limitBlocked)
+                    const Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Icon(
+                        Icons.lock_rounded,
+                        size: 13,
+                        color: AppColors.danger,
+                      ),
+                    ),
                   Positioned(
                     top: 9,
                     right: 10,
@@ -171,7 +209,8 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
 
   @override
   void dispose() {
-    if (_pointer != null) _machine?.stopMovement(widget.movement);
+    final pressId = _pressId;
+    if (pressId != null) _pressMachine?.releaseMovement(pressId);
     super.dispose();
   }
 }

@@ -47,7 +47,8 @@ class DashboardScreen extends StatelessWidget {
                     child: SafetyBanner(
                       icon: CupertinoIcons.exclamationmark_triangle,
                       title: 'Final de carrera activado',
-                      message: 'Movimiento bloqueado por seguridad.',
+                      message:
+                          'Revisa los finales en Control y suelta el botón antes de retirarte del límite.',
                       color: AppColors.danger,
                     ),
                   ),
@@ -171,7 +172,9 @@ class _MachineHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activity = state.finalLimitActive == true
-        ? 'Bloqueada por seguridad'
+        ? state.finalLimits.hasFault
+              ? 'Fallo de sensores'
+              : 'Final de carrera activado'
         : state.activeMovement?.label ??
               (state.sequenceActive
                   ? 'Secuencia automática activa'

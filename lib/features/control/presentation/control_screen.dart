@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +9,7 @@ import '../../../core/models/machine_state.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../../../features/settings/controller/settings_controller.dart';
 import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/final_limits_panel.dart';
 import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/status_widgets.dart';
@@ -40,12 +43,13 @@ class ControlScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 15),
-                if (state.finalLimitActive == true) ...[
+                if (state.finalLimitActive == true &&
+                    !state.finalLimits.isComplete) ...[
                   const SafetyBanner(
                     icon: CupertinoIcons.exclamationmark_triangle,
                     title: 'Final de carrera activado',
                     message:
-                        'Movimiento bloqueado por seguridad. Pinza y STOP siguen disponibles.',
+                        'Esperando los cuatro finales. Pinza y STOP siguen disponibles.',
                     color: AppColors.danger,
                   ),
                   const SizedBox(height: 12),
@@ -123,7 +127,11 @@ class _ControlConsole extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       state.activeMovement == null
-                          ? 'Heartbeat listo · 200 ms'
+                          ? !state.finalLimits.isComplete
+                                ? 'Esperando finales de carrera'
+                                : machine.awaitingMovementRelease
+                                ? 'Suelta el botón para continuar'
+                                : 'Heartbeat listo · 200 ms'
                           : 'Motor activo · suelta para detener',
                       style: Theme.of(
                         context,
@@ -207,6 +215,15 @@ class _ControlConsole extends StatelessWidget {
           ],
           const SizedBox(height: 14),
           _ControlPad(machine: machine),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(height: 1),
+          ),
+          FinalLimitsPanel(
+            limits: state.finalLimits,
+            awaitingRelease:
+                machine.awaitingMovementRelease && state.activeMovement == null,
+          ),
         ],
       ),
     );
@@ -220,56 +237,75 @@ class _ControlPad extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = machine.state;
-    final enabled = machine.canStartMovement;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 410),
-      child: AspectRatio(
-        aspectRatio: 1.13,
-        child: GridView.count(
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 3,
-          childAspectRatio: 1.18,
-          mainAxisSpacing: 9,
-          crossAxisSpacing: 9,
-          children: [
-            const SizedBox.shrink(),
-            HoldToMoveButton(
-              movement: MovementDirection.zUp,
-              icon: CupertinoIcons.chevron_up,
-              label: 'Subir Z',
-              enabled: enabled || state.activeMovement == MovementDirection.zUp,
-              active: state.activeMovement == MovementDirection.zUp,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final cellWidth = (constraints.maxWidth - 18) / 3;
+          final cellHeight = math.max(
+            cellWidth / 1.18,
+            58 + MediaQuery.textScalerOf(context).scale(10.5) * 2,
+          );
+          return SizedBox(
+            height: cellHeight * 3 + 18,
+            child: GridView.count(
+              padding: EdgeInsets.zero,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 3,
+              childAspectRatio: cellWidth / cellHeight,
+              mainAxisSpacing: 9,
+              crossAxisSpacing: 9,
+              children: [
+                const SizedBox.shrink(),
+                HoldToMoveButton(
+                  movement: MovementDirection.zUp,
+                  icon: CupertinoIcons.chevron_up,
+                  label: 'Subir Z',
+                  enabled: machine.canMove(MovementDirection.zUp),
+                  limitBlocked: state.finalLimits.blocks(MovementDirection.zUp),
+                  active: state.activeMovement == MovementDirection.zUp,
+                ),
+                const SizedBox.shrink(),
+                HoldToMoveButton(
+                  movement: MovementDirection.xLeft,
+                  icon: CupertinoIcons.chevron_left,
+                  label: 'Izquierda',
+                  enabled: machine.canMove(MovementDirection.xLeft),
+                  limitBlocked: state.finalLimits.blocks(
+                    MovementDirection.xLeft,
+                  ),
+                  active: state.activeMovement == MovementDirection.xLeft,
+                ),
+                _StopButton(
+                  enabled: machine.hasValidConnection,
+                  onPressed: machine.stopNow,
+                ),
+                HoldToMoveButton(
+                  movement: MovementDirection.xRight,
+                  icon: CupertinoIcons.chevron_right,
+                  label: 'Derecha',
+                  enabled: machine.canMove(MovementDirection.xRight),
+                  limitBlocked: state.finalLimits.blocks(
+                    MovementDirection.xRight,
+                  ),
+                  active: state.activeMovement == MovementDirection.xRight,
+                ),
+                const SizedBox.shrink(),
+                HoldToMoveButton(
+                  movement: MovementDirection.zDown,
+                  icon: CupertinoIcons.chevron_down,
+                  label: 'Bajar Z',
+                  enabled: machine.canMove(MovementDirection.zDown),
+                  limitBlocked: state.finalLimits.blocks(
+                    MovementDirection.zDown,
+                  ),
+                  active: state.activeMovement == MovementDirection.zDown,
+                ),
+                const SizedBox.shrink(),
+              ],
             ),
-            const SizedBox.shrink(),
-            HoldToMoveButton(
-              movement: MovementDirection.xLeft,
-              icon: CupertinoIcons.chevron_left,
-              label: 'Izquierda',
-              enabled:
-                  enabled || state.activeMovement == MovementDirection.xLeft,
-              active: state.activeMovement == MovementDirection.xLeft,
-            ),
-            _StopButton(enabled: state.isConnected, onPressed: machine.stopNow),
-            HoldToMoveButton(
-              movement: MovementDirection.xRight,
-              icon: CupertinoIcons.chevron_right,
-              label: 'Derecha',
-              enabled:
-                  enabled || state.activeMovement == MovementDirection.xRight,
-              active: state.activeMovement == MovementDirection.xRight,
-            ),
-            const SizedBox.shrink(),
-            HoldToMoveButton(
-              movement: MovementDirection.zDown,
-              icon: CupertinoIcons.chevron_down,
-              label: 'Bajar Z',
-              enabled:
-                  enabled || state.activeMovement == MovementDirection.zDown,
-              active: state.activeMovement == MovementDirection.zDown,
-            ),
-            const SizedBox.shrink(),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -389,7 +425,7 @@ class _ToolDeck extends StatelessWidget {
                     children: [
                       Icon(CupertinoIcons.arrow_left_right, size: 17),
                       SizedBox(width: 8),
-                      Text('Abrir'),
+                      Flexible(child: Text('Abrir')),
                     ],
                   ),
                 ),
@@ -405,7 +441,7 @@ class _ToolDeck extends StatelessWidget {
                     children: [
                       Icon(CupertinoIcons.arrow_right_arrow_left, size: 17),
                       SizedBox(width: 8),
-                      Text('Cerrar'),
+                      Flexible(child: Text('Cerrar')),
                     ],
                   ),
                 ),
@@ -774,7 +810,7 @@ class _EmergencyDock extends StatelessWidget {
             minimumSize: const Size(94, 46),
             padding: const EdgeInsets.symmetric(horizontal: 17),
           ),
-          onPressed: machine.state.isConnected ? machine.emergencyStop : null,
+          onPressed: machine.hasValidConnection ? machine.emergencyStop : null,
           child: const Text('DETENER'),
         ),
       ],

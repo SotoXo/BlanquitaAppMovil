@@ -20,7 +20,7 @@ void main() {
   late TestVisionDiscovery discovery;
   final channels = <TestVisionChannel>[];
   final urls = <Uri>[];
-  var savedUrl = 'ws://172.20.10.7:8765/';
+  var savedUrl = 'ws://172.20.10.7:8765/vision';
   late void Function(Uri, TestVisionChannel) onOpen;
 
   setUp(() async {
@@ -33,9 +33,8 @@ void main() {
     );
     await settings.load();
     discovery = TestVisionDiscovery();
-    onOpen = (_, channel) => scheduleMicrotask(
-      () => channel.receive('vision.ready', DateTime.now()),
-    );
+    onOpen = (_, channel) =>
+        scheduleMicrotask(() => channel.establish(DateTime.now()));
     vision = VisionController(
       settings,
       discoveryService: discovery,
@@ -62,7 +61,7 @@ void main() {
     }
     channels.clear();
     urls.clear();
-    savedUrl = 'ws://172.20.10.7:8765/';
+    savedUrl = 'ws://172.20.10.7:8765/vision';
   });
 
   test('valid saved URL requires ready and avoids discovery', () async {
@@ -89,7 +88,7 @@ void main() {
       expect(vision.state.isConnected, false);
       expect(vision.state.ready, false);
       expect(channels.single.sink.sent, isEmpty);
-      channels.single.receive('vision.ready', DateTime.now());
+      channels.single.establish(DateTime.now());
       await connecting;
       expect(vision.state.ready, true);
       expect(discovery.calls, 0);
@@ -99,7 +98,7 @@ void main() {
   test(
     'obsolete saved URL discovers and saves new address after ready only',
     () async {
-      final candidate = Uri.parse('ws://192.168.137.115:8765/');
+      final candidate = Uri.parse('ws://192.168.137.115:8765/vision');
       discovery.result = () async => candidate;
       onOpen = (_, _) {};
       final connecting = vision.connect();
@@ -108,7 +107,7 @@ void main() {
       expect(vision.detectedAddress, '192.168.137.115');
       expect(vision.state.isConnected, false);
       expect(settings.settings.visionWebsocketUrl, savedUrl);
-      channels.last.receive('vision.ready', DateTime.now());
+      channels.last.establish(DateTime.now());
       await connecting;
       expect(vision.state.ready, true);
       expect(settings.settings.visionWebsocketUrl, candidate.toString());
@@ -124,7 +123,7 @@ void main() {
   test(
     'candidate without vision.ready never persists and manual fallback stays',
     () async {
-      discovery.result = () async => Uri.parse('ws://10.42.193.8:8765/');
+      discovery.result = () async => Uri.parse('ws://10.42.193.8:8765/vision');
       onOpen = (_, channel) => scheduleMicrotask(
         () => channel.receive('vision.hello', DateTime.now()),
       );
@@ -135,9 +134,8 @@ void main() {
       expect(settings.settings.visionWebsocketUrl, savedUrl);
       expect(vision.discoveryStatusLabel, 'Candidato sin vision.ready');
       expect(vision.isConnecting, false);
-      onOpen = (_, channel) => scheduleMicrotask(
-        () => channel.receive('vision.ready', DateTime.now()),
-      );
+      onOpen = (_, channel) =>
+          scheduleMicrotask(() => channel.establish(DateTime.now()));
       await vision.connect();
       expect(vision.state.ready, true);
       expect(urls.last.toString(), savedUrl);
@@ -148,7 +146,8 @@ void main() {
     'invalid envelope or ready:false cannot validate UDP candidate',
     () async {
       await settings.setVisionWebsocketUrl('');
-      discovery.result = () async => Uri.parse('ws://192.168.137.115:8765/');
+      discovery.result = () async =>
+          Uri.parse('ws://192.168.137.115:8765/vision');
       onOpen = (_, channel) => scheduleMicrotask(() {
         for (final changes in <Map<String, Object?>>[
           {'protocol': 'other'},
@@ -180,17 +179,21 @@ void main() {
 
   test('empty saved URL discovers at startup without a fixed IP', () async {
     await settings.setVisionWebsocketUrl('');
-    discovery.result = () async => Uri.parse('ws://10.42.193.22:8765/');
+    discovery.result = () async => Uri.parse('ws://10.42.193.22:8765/vision');
     await vision.connect();
     expect(discovery.calls, 1);
     expect(urls.single.host, '10.42.193.22');
-    expect(settings.settings.visionWebsocketUrl, 'ws://10.42.193.22:8765/');
+    expect(
+      settings.settings.visionWebsocketUrl,
+      'ws://10.42.193.22:8765/vision',
+    );
   });
 
   test(
     'explicit search uses UDP first without trying obsolete manual address',
     () async {
-      discovery.result = () async => Uri.parse('ws://192.168.137.115:8765/');
+      discovery.result = () async =>
+          Uri.parse('ws://192.168.137.115:8765/vision');
       await vision.searchVision();
       expect(discovery.calls, 1);
       expect(urls.single.host, '192.168.137.115');
@@ -203,12 +206,10 @@ void main() {
       await settings.setVisionAutoReconnect(true);
       var liveHost = '172.20.10.7';
       discovery.result = () async =>
-          Uri(scheme: 'ws', host: liveHost, port: 8765, path: '/');
+          Uri(scheme: 'ws', host: liveHost, port: 8765, path: '/vision');
       onOpen = (uri, channel) {
         if (uri.host == liveHost) {
-          scheduleMicrotask(
-            () => channel.receive('vision.ready', DateTime.now()),
-          );
+          scheduleMicrotask(() => channel.establish(DateTime.now()));
         }
       };
       await vision.connect();
@@ -218,7 +219,9 @@ void main() {
         liveHost = newHost;
         await channels.last.incoming.close();
         await until(
-          () => settings.settings.visionWebsocketUrl == 'ws://$newHost:8765/',
+          () =>
+              settings.settings.visionWebsocketUrl ==
+              'ws://$newHost:8765/vision',
         );
         expect(vision.state.ready, true);
         expect(urls[offset].toString(), oldUrl);
@@ -277,7 +280,7 @@ void main() {
       final searching = vision.searchVision();
       await until(() => vision.isDiscovering);
       await vision.disconnect();
-      candidate.complete(Uri.parse('ws://192.168.137.115:8765/'));
+      candidate.complete(Uri.parse('ws://192.168.137.115:8765/vision'));
       await searching;
       expect(vision.state.isConnected, false);
       expect(urls, isEmpty);
@@ -302,7 +305,7 @@ void main() {
       final connecting = vision.connect();
       await until(() => channels.isNotEmpty);
       await vision.disconnect();
-      channels.single.receive('vision.ready', DateTime.now());
+      channels.single.establish(DateTime.now());
       await connecting;
       expect(vision.state.isConnected, false);
       expect(discovery.calls, 0);

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:blanquita/core/models/machine_state.dart';
 import 'package:blanquita/core/storage/settings_repository.dart';
@@ -33,9 +34,9 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({
-      'vision.websocket_url': 'ws://laptop.test:8765/',
+      'vision.websocket_url': 'ws://laptop.test:8765/vision',
       'vision.auto_reconnect': true,
-      'vision.heartbeat_timeout_ms': 2000,
+      'vision.heartbeat_timeout_ms': 6000,
       'control.haptics': false,
     });
     settings = SettingsController(
@@ -54,7 +55,7 @@ void main() {
           urls.add(uri);
           final channel = TestVisionChannel();
           channels.add(channel);
-          scheduleMicrotask(() => channel.receive('vision.ready', now));
+          scheduleMicrotask(() => channel.establish(now));
           return channel;
         },
       ),
@@ -77,7 +78,7 @@ void main() {
     expect(vision.state.isConnected, true);
     expect(vision.state.ready, true);
     expect(vision.state.position, isNull);
-    channels.last.receive('vision.ready', now);
+    channels.last.establish(now);
     expect(vision.state.ready, true);
     channels.last.receive('vision.status', now, {'ready': false});
     expect(vision.state.ready, false);
@@ -124,7 +125,7 @@ void main() {
     expect(vision.state.error, isNotNull);
     expect(vision.state.lastReport, same(report));
     channels.last.receive('motor.move', now, {'command': 'd'});
-    expect(vision.state.lastHeartbeat, isNull);
+    expect(vision.state.lastHeartbeat, now);
     expect(vision.state.lastReport, same(report));
     expect(vision.diagnostics.any((item) => item.contains('ignorado')), true);
   });
@@ -133,10 +134,10 @@ void main() {
     'heartbeat timeout is independent from report freshness and recovers',
     () async {
       await vision.connect();
-      channels.last.receive('vision.ready', now);
+      channels.last.establish(now);
       channels.last.receive('vision.heartbeat', now);
       channels.last.receive('vision.report', now, {'object': 'pieza'});
-      now = now.add(const Duration(seconds: 3));
+      now = now.add(const Duration(seconds: 7));
       await until(() => vision.state.stale);
       expect(vision.state.ready, false);
       expect(vision.state.stale, true);
@@ -151,7 +152,7 @@ void main() {
 
   test('reports cannot hide a missing heartbeat', () async {
     await vision.connect();
-    now = now.add(const Duration(seconds: 3));
+    now = now.add(const Duration(seconds: 7));
     channels.last.receive('vision.report', now, {'detected': true});
     await until(() => vision.state.stale);
     expect(vision.state.reportStale, true);
@@ -210,7 +211,7 @@ void main() {
 
   test('manual disconnect cancels reconnect and clears readiness', () async {
     await vision.connect();
-    channels.last.receive('vision.ready', now);
+    channels.last.establish(now);
     await vision.disconnect();
     expect(vision.state.connection, VisionConnection.disconnected);
     expect(vision.state.ready, false);
@@ -239,7 +240,7 @@ void main() {
       await channels.last.incoming.close();
       expect(vision.diagnostics.first.contains('Reconexión en 40 ms'), true);
       await until(() => channels.length == 4 && vision.state.isConnected);
-      channels.last.receive('vision.ready', now);
+      channels.last.establish(now);
       expect(vision.reconnectAttempts, 0);
     },
   );
@@ -261,12 +262,12 @@ void main() {
   test('endpoint change replaces session without reusing telemetry', () async {
     await vision.connect();
     channels.last.receive('vision.status', now, {'cameraName': 'Old USB'});
-    await settings.setVisionWebsocketUrl('ws://other-laptop.test:8765/');
+    await settings.setVisionWebsocketUrl('ws://other-laptop.test:8765/vision');
     await until(() => channels.length == 2 && vision.state.isConnected);
     expect(urls.last.host, 'other-laptop.test');
     expect(channels.first.sink.closed, true);
     expect(vision.state.cameraName, isNull);
-    expect(vision.state.lastHeartbeat, isNull);
+    expect(vision.state.lastHeartbeat, now);
   });
 
   test('lifecycle closes cleanly and resumes only a desired link', () async {
@@ -274,6 +275,7 @@ void main() {
     vision.handleAppInactive();
     await settle();
     expect(vision.state.ready, false);
+    expect(vision.networkPhase, VisionNetworkPhase.disconnected);
     expect(channels.first.sink.closed, true);
     vision.handleAppResumed();
     await until(() => channels.length == 2 && vision.state.isConnected);
@@ -283,6 +285,126 @@ void main() {
     await settle();
     expect(channels.length, 2);
   });
+
+  test('hello then ready then a new heartbeat are all required', () async {
+    vision.dispose();
+    final channel = TestVisionChannel();
+    channels.add(channel);
+    vision = VisionController(
+      settings,
+      discoveryService: TestVisionDiscovery(),
+      service: RemoteVisionService(channelFactory: (_) => channel),
+    );
+    final connecting = vision.connect();
+    await until(() => vision.networkPhase == VisionNetworkPhase.waitingHello);
+    channel.receive('vision.ready', now);
+    expect(vision.state.isConnected, false);
+    expect(vision.lastFailure!.category, 'Orden de protocolo inválido');
+    channel.receive('vision.hello', now);
+    channel.receive('vision.heartbeat', now);
+    channel.receive('vision.ready', now);
+    expect(vision.networkPhase, VisionNetworkPhase.waitingHeartbeat);
+    expect(vision.state.isConnected, false);
+    channel.receive('vision.heartbeat', now);
+    await connecting;
+    expect(vision.state.ready, true);
+  });
+
+  test('simultaneous connect calls open exactly one socket', () async {
+    await Future.wait([vision.connect(), vision.connect(), vision.connect()]);
+    expect(channels.length, 1);
+    expect(vision.connectionAttempt, 1);
+    expect(urls.single.toString(), 'ws://laptop.test:8765/vision');
+    await vision.reconnect();
+    expect(urls.length, 2);
+    expect(urls.last.path, '/vision');
+    expect(channels.first.sink.closed, true);
+  });
+
+  test('new attempt waits for cancellation of the old session', () async {
+    vision.dispose();
+    final closeGate = Completer<void>();
+    final openingGate = Completer<void>();
+    var opens = 0;
+    vision = VisionController(
+      settings,
+      discoveryService: TestVisionDiscovery(),
+      service: RemoteVisionService(
+        channelFactory: (uri) {
+          ++opens;
+          final channel = opens == 1
+              ? TestVisionChannel(
+                  handshake: openingGate.future,
+                  sink: TestVisionSink(closeDelay: closeGate.future),
+                )
+              : TestVisionChannel();
+          channels.add(channel);
+          if (opens > 1) scheduleMicrotask(() => channel.establish(now));
+          return channel;
+        },
+      ),
+    );
+    final first = vision.connect();
+    await until(() => opens == 1);
+    final replacement = vision.saveEndpointAndReconnect('ws://new-host:8765/');
+    await settle();
+    expect(opens, 1);
+    expect(channels.first.sink.closed, true);
+    closeGate.complete();
+    openingGate.complete();
+    await Future.wait([first, replacement]);
+    expect(opens, 2);
+    expect(vision.connectionWebsocketUrl, 'ws://new-host:8765/vision');
+  });
+
+  test(
+    'default heartbeat is fresh before 6s and stale exactly at 6s',
+    () async {
+      await settings.setVisionAutoReconnect(false);
+      await vision.connect();
+      now = now.add(const Duration(milliseconds: 5999));
+      await settle();
+      expect(vision.state.ready, true);
+      now = now.add(const Duration(milliseconds: 1));
+      await until(() => vision.state.stale);
+      expect(vision.state.isConnected, false);
+      expect(vision.lastFailure!.category, 'Heartbeat timeout posterior');
+    },
+  );
+
+  test(
+    'diagnostic mode preserves original HTTP failure and disables retry',
+    () async {
+      vision.dispose();
+      vision = VisionController(
+        settings,
+        reconnectBaseDelay: const Duration(milliseconds: 5),
+        discoveryService: TestVisionDiscovery(),
+        service: RemoteVisionService(
+          channelFactory: (_) =>
+              throw WebSocketException('original handshake failure', 404),
+        ),
+      );
+      vision.setDiagnosticMode(true);
+      await vision.connect();
+      await settle();
+      expect(vision.connectionAttempt, 1);
+      expect(vision.firstFailure!.type, 'WebSocketException');
+      expect(vision.firstFailure!.httpStatus, 404);
+      expect(vision.firstFailure!.uri, 'ws://laptop.test:8765/vision');
+      expect(
+        vision.firstFailure!.message,
+        contains('original handshake failure'),
+      );
+      expect(vision.firstFailure!.stack.toString(), isNotEmpty);
+      expect(vision.state.error, contains('original handshake failure'));
+      expect(vision.state.connection, VisionConnection.disconnected);
+      vision.handleAppInactive();
+      vision.handleAppResumed();
+      await settle();
+      expect(vision.connectionAttempt, 1);
+    },
+  );
 
   test(
     'invalid or empty URL discovers without opening an invalid socket',
@@ -294,6 +416,13 @@ void main() {
         'ws://',
         'ws://laptop.test/#fragment',
       ]) {
+        if (url.isNotEmpty) {
+          expect(
+            () => settings.setVisionWebsocketUrl(url),
+            throwsFormatException,
+          );
+          continue;
+        }
         await settings.setVisionWebsocketUrl(url);
         await vision.connect();
         expect(vision.state.connection, VisionConnection.disconnected);
@@ -313,6 +442,7 @@ void main() {
       service: RemoteVisionService(channelFactory: (_) => pending),
     );
     final connecting = vision.connect();
+    await until(() => vision.connectionAttempt == 1);
     await vision.disconnect();
     handshake.complete();
     await connecting;
@@ -334,7 +464,7 @@ void main() {
     );
     await vision.connect();
     expect(vision.state.connection, VisionConnection.disconnected);
-    expect(vision.state.error, contains('vision.ready'));
+    expect(vision.state.error, contains('Timeout TCP/upgrade'));
     expect(pending.sink.closed, true);
     handshake.complete();
   });
@@ -355,6 +485,9 @@ void main() {
     await until(() => machine.state.connection == ConnectionPhase.connecting);
     await settle();
     machineSocket.incoming.add('READY');
+    for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+      machineSocket.incoming.add('SENSOR:FC:$name:0');
+    }
     await connectingMachine;
     expect(machine.state.isConnected, true);
     expect(vision.state.isConnected, false);
@@ -365,7 +498,7 @@ void main() {
     });
     vision.start();
     expect(machine.state.activeMovement, MovementDirection.xRight);
-    now = now.add(const Duration(seconds: 3));
+    now = now.add(const Duration(seconds: 7));
     await until(() => vision.state.stale);
     await until(() => machineSocket.sink.sent.contains('k'));
     expect(machine.state.activeMovement, MovementDirection.xRight);

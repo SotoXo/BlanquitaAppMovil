@@ -4,12 +4,27 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/settings/controller/app_settings.dart';
+import '../../features/vision/domain/vision_endpoint.dart';
 import '../models/esp32_device.dart';
 
 class SettingsRepository {
   const SettingsRepository(this._preferences);
 
   final SharedPreferences _preferences;
+
+  Future<void> migrateVisionEndpoint() async {
+    final stored = _preferences.getString(_Keys.visionWebsocketUrl) ?? '';
+    if (stored.trim().isNotEmpty && VisionEndpoint.isValid(stored)) {
+      final normalized = VisionEndpoint.normalize(stored);
+      if (stored != normalized) {
+        await _preferences.setString(_Keys.visionWebsocketUrl, normalized);
+      }
+    }
+    final oldTimeout = _preferences.getInt(_Keys.visionHeartbeatTimeout);
+    if (oldTimeout != null && oldTimeout < 6000) {
+      await _preferences.setInt(_Keys.visionHeartbeatTimeout, 6000);
+    }
+  }
 
   AppSettings load() {
     return AppSettings(
@@ -39,14 +54,13 @@ class SettingsRepository {
           _preferences.getBool(_Keys.connectionLossAlerts) ?? true,
       visualSensitivity:
           _preferences.getDouble(_Keys.visualSensitivity) ?? 0.65,
-      visionWebsocketUrl:
-          _preferences.getString(_Keys.visionWebsocketUrl) ?? '',
+      visionWebsocketUrl: _visionEndpoint(),
       visionAutoReconnect:
           _preferences.getBool(_Keys.visionAutoReconnect) ?? true,
       visionHeartbeatTimeout: Duration(
         milliseconds:
-            (_preferences.getInt(_Keys.visionHeartbeatTimeout) ?? 5000).clamp(
-              1000,
+            (_preferences.getInt(_Keys.visionHeartbeatTimeout) ?? 6000).clamp(
+              6000,
               60000,
             ),
       ),
@@ -95,7 +109,7 @@ class SettingsRepository {
       ),
       _preferences.setString(
         _Keys.visionWebsocketUrl,
-        settings.visionWebsocketUrl,
+        _normalizeStoredVisionUrl(settings.visionWebsocketUrl),
       ),
       _preferences.setBool(
         _Keys.visionAutoReconnect,
@@ -121,6 +135,15 @@ class SettingsRepository {
       return null;
     }
   }
+
+  String _visionEndpoint() => _normalizeStoredVisionUrl(
+    _preferences.getString(_Keys.visionWebsocketUrl) ?? '',
+  );
+
+  String _normalizeStoredVisionUrl(String value) =>
+      value.trim().isEmpty || VisionEndpoint.isValid(value)
+      ? VisionEndpoint.normalize(value)
+      : value.trim(); // Keep invalid historic input editable, never open it.
 
   T _enumByName<T extends Enum>(List<T> values, String? name, T fallback) {
     if (name == null) return fallback;

@@ -52,7 +52,7 @@ class Harness {
   final channels = <TestVisionChannel>[];
   final urls = <Uri>[];
   final failedHosts = <String>{};
-  Esp32TestPeer Function() peer = () => Esp32TestPeer();
+  Esp32TestPeer Function() peer = () => Esp32TestPeer(initialLimits: true);
   Future<void> setup({
     String url = 'ws://10.2.3.44:81/',
     bool lab = true,
@@ -97,16 +97,47 @@ class Harness {
     });
   }
 
-  Future<void> connectLegacy() async {
+  Future<void> connectLegacy({bool withLimits = true}) async {
     final connecting = machine.connect();
     await until(() => channels.isNotEmpty);
     channels.last.incoming.add('READY');
     await connecting;
+    if (withLimits) {
+      for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+        channels.last.incoming.add('SENSOR:FC:$name:0');
+      }
+    }
   }
 }
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test(
+    'V2 transports individual limits and STOP-release with signed commands',
+    () async {
+      final h = Harness();
+      await h.setup(v2: true);
+      h.peer = () => Esp32TestPeer();
+      await h.machine.connect();
+      final p = h.channels.single as Esp32TestPeer;
+      expect(h.machine.canStartMovement, false);
+      for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+        p.event('SENSOR:FC:$name:0');
+      }
+      final press = h.machine.beginMovement(MovementDirection.xLeft)!;
+      p.event('STOP');
+      p.event('LIMITE:FINAL_X_IZQUIERDA');
+      p.event('SENSOR:FC:X_IZQ:1');
+      h.machine.releaseMovement(press);
+      expect(p.commands, ['a', 'x']);
+      expect(h.machine.canMove(MovementDirection.xLeft), false);
+      expect(h.machine.canMove(MovementDirection.xRight), true);
+      final retreat = h.machine.beginMovement(MovementDirection.xRight)!;
+      h.machine.releaseMovement(retreat);
+      expect(p.commands, ['a', 'x', 'd', 'x']);
+      expect(h.machine.isAuthorized, true);
+    },
+  );
   test('manual disconnect cancels pairing before a socket can open', () async {
     final h = Harness();
     await h.setup(v2: true, bound: false);
@@ -219,14 +250,14 @@ void main() {
     },
   );
   test(
-    'sensor snapshot and final limit still block movement and sequence',
+    'legacy sensor snapshot stays observable but cannot replace the four limits',
     () async {
       final h = Harness();
       await h.setup();
-      await h.connectLegacy();
+      await h.connectLegacy(withLimits: false);
       h.channels.single.incoming.add('SENSOR:ESTADO:P=1,F=0');
       expect(h.machine.state.plateDetected, true);
-      h.machine.startMovement(MovementDirection.xRight);
+      expect(h.machine.startMovement(MovementDirection.xRight), false);
       h.channels.single.incoming.add('SENSOR:FINAL:1');
       expect(h.machine.state.finalLimitActive, true);
       expect(h.machine.state.activeMovement, isNull);
@@ -454,6 +485,7 @@ void main() {
         h.machine.startMovement(MovementDirection.zDown);
         h.machine.handleAppInactive();
         expect(previous.commands, ['s', 'x']);
+        h.machine.stopMovement(); // Physical release after the app suspended.
         expect(h.machine.canStartMovement, false);
         h.failedHosts.add(Uri.parse(h.settings.settings.websocketUrl).host);
         h.discovery.result = () async => [

@@ -59,9 +59,7 @@ void main() {
         tickInterval: const Duration(days: 1),
         service: RemoteVisionService(
           channelFactory: (_) {
-            scheduleMicrotask(
-              () => channel.receive('vision.ready', DateTime.now()),
-            );
+            scheduleMicrotask(() => channel.establish(DateTime.now()));
             return channel;
           },
         ),
@@ -84,7 +82,7 @@ void main() {
       expect(visionDiscovery.calls, 1);
       expect(machine.isDiscovering, true);
       expect(vision.isDiscovering, true);
-      visionResult.complete(Uri.parse('ws://192.168.137.115:8765/'));
+      visionResult.complete(Uri.parse('ws://192.168.137.115:8765/vision'));
       await tester.pump();
       expect(vision.state.ready, true);
       expect(machine.isDiscovering, true);
@@ -95,7 +93,7 @@ void main() {
       expect(find.text('Dirección detectada: 192.168.137.115'), findsOneWidget);
       expect(find.text('Discovery: Visor validado'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await vision.disconnect();
+      await tester.runAsync(() => vision.disconnect());
       await tester.pumpWidget(const SizedBox());
       await tester.runAsync(() => channel.incoming.close());
     },
@@ -161,7 +159,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       SharedPreferences.setMockInitialValues({
-        'vision.websocket_url': 'ws://laptop.test:8765/',
+        'vision.websocket_url': 'ws://laptop.test:8765/vision',
         'appearance.performance_mode': true,
         'appearance.reduce_motion': true,
       });
@@ -170,7 +168,7 @@ void main() {
       );
       await settings.load();
       final machine = MachineController(settings);
-      final channel = TestVisionChannel();
+      late TestVisionChannel channel;
       final now = DateTime.utc(2026, 10, 6, 10, 30);
       final vision = VisionController(
         settings,
@@ -178,14 +176,15 @@ void main() {
         tickInterval: const Duration(days: 1),
         service: RemoteVisionService(
           channelFactory: (_) {
-            scheduleMicrotask(() => channel.receive('vision.ready', now));
+            channel = TestVisionChannel();
+            scheduleMicrotask(() => channel.establish(now));
             return channel;
           },
         ),
       );
       // Real transport futures and timer cleanup run outside the widget fake clock.
       await tester.runAsync(() => vision.connect());
-      channel.receive('vision.ready', now);
+      channel.establish(now);
       channel.receive('vision.status', now, {
         'cameraName': 'USB laptop',
         'cameraStatus': 'operative',
@@ -233,12 +232,15 @@ void main() {
       await tester.tap(find.text('Guardar'));
       await tester.pumpAndSettle();
       expect(
-        find.text('Introduce una URL ws:// o wss:// válida.'),
+        find.text('Usa ws://HOST:PUERTO/vision sin query ni fragmento.'),
         findsOneWidget,
       );
       await tester.tap(find.text('Cancelar'));
       await tester.pumpAndSettle();
-      expect(settings.settings.visionWebsocketUrl, 'ws://laptop.test:8765/');
+      expect(
+        settings.settings.visionWebsocketUrl,
+        'ws://laptop.test:8765/vision',
+      );
       expect(tester.takeException(), isNull);
       await tester.runAsync(() => vision.disconnect());
       await tester.pumpWidget(const SizedBox());
