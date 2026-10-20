@@ -17,8 +17,97 @@ import 'package:provider/provider.dart';
 import 'features/vision/support/vision_test_channel.dart';
 
 import 'package:blanquita/features/vision/services/remote_vision_service.dart';
+import 'dart:async';
+import 'package:blanquita/core/models/esp32_device.dart';
+import 'package:blanquita/core/network/esp32_discovery_service.dart';
+import 'features/vision/support/vision_test_discovery.dart';
+
+class _WidgetDiscovery extends Esp32DiscoveryService {
+  _WidgetDiscovery(this.result);
+  final Future<Uri?> Function() result;
+  int calls = 0;
+  @override
+  Future<List<Esp32Device>> discoverDevices() async {
+    calls++;
+    await result();
+    return [];
+  }
+
+  @override
+  void cancel() {}
+  @override
+  void dispose() {}
+}
 
 void main() {
+  testWidgets(
+    'Buscar dispositivos starts independent searches and preserves Vision on ESP32 failure',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        'connection.auto_reconnect': false,
+        'vision.auto_reconnect': false,
+        'appearance.performance_mode': true,
+        'appearance.reduce_motion': true,
+      });
+      final settings = SettingsController(
+        SettingsRepository(await SharedPreferences.getInstance()),
+      );
+      await settings.load();
+      final machineResult = Completer<Uri?>();
+      final visionResult = Completer<Uri?>();
+      final espDiscovery = _WidgetDiscovery(() => machineResult.future);
+      final visionDiscovery = TestVisionDiscovery(() => visionResult.future);
+      final machine = MachineController(
+        settings,
+        discoveryService: espDiscovery,
+      );
+      final channel = TestVisionChannel();
+      final vision = VisionController(
+        settings,
+        discoveryService: visionDiscovery,
+        tickInterval: const Duration(days: 1),
+        service: RemoteVisionService(
+          channelFactory: (_) {
+            scheduleMicrotask(() => channel.establish(DateTime.now()));
+            return channel;
+          },
+        ),
+      );
+      await tester.pumpWidget(
+        BlanquitaApp(
+          settingsController: settings,
+          machineController: machine,
+          visionController: vision,
+          autoConnect: false,
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ajustes'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Buscar dispositivos'));
+      await tester.tap(find.text('Buscar dispositivos'));
+      await tester.pump();
+      expect(espDiscovery.calls, 1);
+      expect(visionDiscovery.calls, 1);
+      expect(machine.isDiscovering, true);
+      expect(vision.isDiscovering, true);
+      visionResult.complete(Uri.parse('ws://192.168.137.115:8765/vision'));
+      await tester.pump();
+      expect(vision.state.ready, true);
+      expect(machine.isDiscovering, true);
+      machineResult.complete(null);
+      await tester.pumpAndSettle();
+      expect(machine.state.isConnected, false);
+      expect(vision.state.isConnected, true);
+      expect(find.text('Dirección detectada: 192.168.137.115'), findsOneWidget);
+      expect(find.text('Discovery: Visor validado'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.runAsync(() => vision.disconnect());
+      await tester.pumpWidget(const SizedBox());
+      await tester.runAsync(() => channel.incoming.close());
+    },
+  );
+
   testWidgets('shows the four persistent navigation destinations', (
     tester,
   ) async {
@@ -59,7 +148,10 @@ void main() {
     await tester.tap(find.text('Ajustes'));
     await tester.pumpAndSettle();
     expect(find.text('Abrir diagnósticos'), findsOneWidget);
-    expect(find.text('Red esperada: CARTESIANO'), findsOneWidget);
+    expect(
+      find.text('Red local: hotspot o router · sin depender del SSID'),
+      findsOneWidget,
+    );
     expect(find.text('ESP32: Desconectado'), findsOneWidget);
     expect(find.text('Dirección: Sin dirección'), findsOneWidget);
     expect(find.text('Reconectar URL ESP32'), findsOneWidget);
@@ -580,7 +672,7 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(390, 844));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       SharedPreferences.setMockInitialValues({
-        'vision.websocket_url': 'ws://laptop.test:8765/',
+        'vision.websocket_url': 'ws://laptop.test:8765/vision',
         'appearance.performance_mode': true,
         'appearance.reduce_motion': true,
       });
@@ -589,17 +681,23 @@ void main() {
       );
       await settings.load();
       final machine = MachineController(settings);
-      final channel = TestVisionChannel();
+      late TestVisionChannel channel;
       final now = DateTime.utc(2026, 10, 6, 10, 30);
       final vision = VisionController(
         settings,
         now: () => now,
         tickInterval: const Duration(days: 1),
-        service: RemoteVisionService(channelFactory: (_) => channel),
+        service: RemoteVisionService(
+          channelFactory: (_) {
+            channel = TestVisionChannel();
+            scheduleMicrotask(() => channel.establish(now));
+            return channel;
+          },
+        ),
       );
       // Real transport futures and timer cleanup run outside the widget fake clock.
       await tester.runAsync(() => vision.connect());
-      channel.receive('vision.ready', now);
+      channel.establish(now);
       channel.receive('vision.status', now, {
         'cameraName': 'USB laptop',
         'cameraStatus': 'operative',
@@ -648,12 +746,15 @@ void main() {
       await tester.tap(find.text('Guardar'));
       await tester.pumpAndSettle();
       expect(
-        find.text('Introduce una URL ws:// o wss:// válida.'),
+        find.text('Usa ws://HOST:PUERTO/vision sin query ni fragmento.'),
         findsOneWidget,
       );
       await tester.tap(find.text('Cancelar'));
       await tester.pumpAndSettle();
-      expect(settings.settings.visionWebsocketUrl, 'ws://laptop.test:8765/');
+      expect(
+        settings.settings.visionWebsocketUrl,
+        'ws://laptop.test:8765/vision',
+      );
       expect(tester.takeException(), isNull);
       await tester.runAsync(() => vision.disconnect());
       await tester.pumpWidget(const SizedBox());

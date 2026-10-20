@@ -4,18 +4,18 @@ import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 class TestVisionSink implements WebSocketSink {
+  TestVisionSink({this.closeDelay});
+  final Future<void>? closeDelay;
   final sent = <String>[];
   bool closed = false;
-  Object? closeError;
   final _done = Completer<void>();
   @override
   void add(dynamic data) => sent.add(data as String);
   @override
-  Future<void> close([int? closeCode, String? closeReason]) {
+  Future<void> close([int? closeCode, String? closeReason]) async {
     closed = true;
+    if (closeDelay != null) await closeDelay;
     if (!_done.isCompleted) _done.complete();
-    if (closeError != null) return Future<void>.error(closeError!);
-    return Future<void>.value();
   }
 
   @override
@@ -31,13 +31,18 @@ class TestVisionSink implements WebSocketSink {
 }
 
 class TestVisionChannel implements WebSocketChannel {
-  TestVisionChannel({Future<void>? handshake})
-    : ready = handshake ?? Future.value();
+  TestVisionChannel({Future<void>? handshake, TestVisionSink? sink})
+    : ready = handshake ?? Future.value(),
+      sink = sink ?? TestVisionSink();
   final incoming = StreamController<dynamic>(sync: true);
   @override
-  final TestVisionSink sink = TestVisionSink();
+  final TestVisionSink sink;
   @override
   final Future<void> ready;
+  @override
+  int? get closeCode => null;
+  @override
+  String? get closeReason => null;
   @override
   Stream<dynamic> get stream => incoming.stream;
   void receive(
@@ -55,6 +60,12 @@ class TestVisionChannel implements WebSocketChannel {
         'payload': payload,
       }),
     );
+  }
+
+  void establish(DateTime timestamp) {
+    receive('vision.hello', timestamp);
+    receive('vision.ready', timestamp);
+    receive('vision.heartbeat', timestamp);
   }
 
   @override

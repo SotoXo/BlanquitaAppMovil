@@ -3,41 +3,38 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 
-import '../../../core/diagnostics/connection_log.dart';
-import '../../../core/network/connection_failure.dart';
 import '../../settings/controller/app_settings.dart';
 import '../../settings/controller/settings_controller.dart';
 import '../domain/vision_message.dart';
+import '../domain/vision_endpoint.dart';
+import '../domain/vision_network_failure.dart';
 import '../domain/vision_state.dart';
 import '../domain/vision_status.dart';
 import '../services/remote_vision_service.dart';
+import '../services/vision_discovery_service.dart';
 import '../services/vision_protocol_parser.dart';
 
 class VisionController extends ChangeNotifier {
   VisionController(
     this._settings, {
     RemoteVisionService? service,
+    VisionDiscoveryService? discoveryService,
     DateTime Function()? now,
-    ConnectionLog? connectionLog,
     this.connectionTimeout = const Duration(seconds: 8),
-    Duration? readyTimeout,
     this.reconnectBaseDelay = const Duration(seconds: 1),
     this.tickInterval = const Duration(seconds: 1),
   }) : _service = service ?? RemoteVisionService(),
-       _connectionLog = connectionLog ?? ConnectionLog.shared,
-       readyTimeout = readyTimeout ?? connectionTimeout,
+       _discovery = discoveryService ?? VisionDiscoveryService(),
        _now = now ?? DateTime.now,
        _previousSettings = _settings.settings {
     _settings.addListener(_settingsChanged);
-    _log('Dirección de visión cargada.');
   }
 
   final SettingsController _settings;
   final RemoteVisionService _service;
-  final ConnectionLog _connectionLog;
+  final VisionDiscoveryService _discovery;
   final DateTime Function() _now;
   final Duration connectionTimeout;
-  final Duration readyTimeout;
   final Duration reconnectBaseDelay;
   final Duration tickInterval;
   final _parser = const VisionProtocolParser();
@@ -47,191 +44,340 @@ class VisionController extends ChangeNotifier {
   StreamSubscription<dynamic>? _subscription;
   Timer? _timer;
   Timer? _retry;
-  Timer? _readyTimer;
-  Completer<bool>? _readyOutcome;
-  bool _protocolReadyReceived = false;
-  bool _transportOpen = false;
-  String _phase = 'disconnected';
-  String? _lastErrorCode;
-  String? _lastTechnicalError;
-  String? _lastCommand;
+  Timer? _handshakeTimer;
+  Completer<bool>? _pendingHandshake;
+  int _socketGeneration = 0;
+  bool _transportReady = false;
+  bool _serverReady = false;
+  bool _helloReceived = false;
+  bool _heartbeatReceived = false;
+  Future<void> _closing = Future<void>.value();
+  VisionNetworkPhase _networkPhase = VisionNetworkPhase.disconnected;
+  VisionNetworkFailure? _firstFailure;
+  VisionNetworkFailure? _lastFailure;
+  int _connectionAttempt = 0;
+  bool _diagnosticMode = false;
+  bool _flowActive = false;
+  bool _isDiscovering = false;
+  String _discoveryStatus = 'Sin búsqueda';
+  String? _detectedUrl;
+  String? _connectionUrl;
+  String? _persistingUrl;
   DateTime? _connectedAt;
   DateTime? _lastPingAt;
   final Map<String, DateTime> _pings = {};
-  final Map<String, DateTime> _sampledLast = {};
-  final Map<String, int> _sampledCounts = {};
   int _generation = 0;
   int _attempt = 0;
-  int _connectionAttempt = 0;
   int _commandId = 0;
   bool _desiredConnection = false;
   bool _inactive = false;
   bool _disposed = false;
-  bool _connectOnResume = false;
   final List<String> _diagnostics = [];
 
   VisionState get state => _state;
   String get endpoint => _settings.settings.visionWebsocketUrl;
+  String? get connectionWebsocketUrl => _connectionUrl;
+  String? get detectedAddress =>
+      _detectedUrl == null ? null : Uri.parse(_detectedUrl!).host;
+  String get discoveryStatusLabel => _discoveryStatus;
+  bool get isDiscovering => _isDiscovering;
   List<String> get diagnostics => List.unmodifiable(_diagnostics);
   int get reconnectAttempts => _attempt;
-  String get phase => _phase;
-  bool get transportOpen => _transportOpen;
-  String? get lastErrorCode => _lastErrorCode;
-  String? get lastTechnicalError => _lastTechnicalError;
-  String? get lastCommand => _lastCommand;
+  int get connectionAttempt => _connectionAttempt;
+  VisionNetworkPhase get networkPhase => _networkPhase;
+  VisionNetworkFailure? get firstFailure => _firstFailure;
+  VisionNetworkFailure? get lastFailure => _lastFailure;
+  bool get diagnosticMode => _diagnosticMode;
+  int? get detectedPort =>
+      _detectedUrl == null ? null : Uri.parse(_detectedUrl!).port;
+
+  void setDiagnosticMode(bool value) {
+    _diagnosticMode = value;
+    if (value) {
+      _retry?.cancel();
+      if (state.connection == VisionConnection.reconnecting) {
+        _phase(
+          _lastFailure == null
+              ? VisionNetworkPhase.disconnected
+              : VisionNetworkPhase.error,
+        );
+        _set(state.copyWith(connection: VisionConnection.disconnected));
+      }
+    } else if (_desiredConnection &&
+        !_inactive &&
+        !state.isConnected &&
+        !isConnecting) {
+      _scheduleRetry();
+    }
+    _log('Diagnóstico sin reintentos automáticos: $value');
+    notifyListeners();
+  }
+
   bool get isConnecting =>
-      state.connection == VisionConnection.connecting ||
-      state.connection == VisionConnection.reconnecting;
+      _flowActive || state.connection == VisionConnection.connecting;
 
   Future<void> connect() async {
     if (_disposed || _inactive || state.isConnected || isConnecting) return;
-    _desiredConnection = true;
-    _connectOnResume = false;
-    _retry?.cancel();
-    final url = endpoint;
-    _phase = 'validating_endpoint';
-    _log('Validando la dirección de la laptop.');
-    if (!RemoteVisionService.isValidUrl(url)) {
-      _desiredConnection = false;
-      _recordFailure(
-        'INVALID_ENDPOINT',
-        'La dirección configurada para la laptop no es válida. Usa ws:// o wss:// con host y puerto correctos.',
-        'EndpointValidation rejected endpoint',
-      );
-      _phase = 'error';
-      _finishReady(false);
-      _set(
-        state.copyWith(
-          connection: VisionConnection.error,
-          error:
-              'La dirección configurada para la laptop no es válida. Usa ws:// o wss:// con host y puerto correctos.',
-        ),
-      );
-      return;
+    await _connectFlow();
+  }
+
+  Future<void> saveEndpointAndReconnect(String value) async {
+    if (_disposed) return;
+    final url = VisionEndpoint.normalize(value);
+    // Invalidate old discovery/socket callbacks before accepting a manual URL.
+    final closing = disconnect();
+    final generation = _generation;
+    await closing;
+    if (!_current(generation)) return;
+    _persistingUrl = url;
+    try {
+      // Suppress the URL listener's automatic reconnect until persistence ends.
+      await _settings.setVisionWebsocketUrl(url);
+    } finally {
+      if (_persistingUrl == url) _persistingUrl = null;
     }
+    if (_current(generation)) await connect();
+  }
+
+  Future<void> searchVision() async {
+    if (_disposed || _inactive || isConnecting) return;
+    final closing = disconnect();
+    final generation = _generation;
+    await closing;
+    if (_current(generation) && !_inactive) {
+      await _connectFlow(discoveryFirst: true);
+    }
+  }
+
+  Future<void> _connectFlow({bool discoveryFirst = false}) async {
+    _desiredConnection = true;
+    _retry?.cancel();
+    _discovery.cancel();
     final generation = ++_generation;
-    ++_connectionAttempt;
-    _readyOutcome = Completer<bool>();
-    _protocolReadyReceived = false;
-    _transportOpen = false;
-    _sampledLast.clear();
-    _sampledCounts.clear();
-    _lastErrorCode = null;
-    _lastTechnicalError = null;
-    _phase = 'transport_connect';
-    _log('Intentando abrir el WebSocket de la laptop.');
-    // Clear session telemetry; old reports must not describe a new server.
+    _flowActive = true;
+    _isDiscovering = false;
+    _connectionUrl = null;
+    final knownUrl = endpoint;
     _set(const VisionState(connection: VisionConnection.connecting));
     try {
-      final session = _service.open(EndpointValidation.parse(url)!);
-      _session = session;
-      // Subscribe before awaiting ready, so early hello/ready are not lost and
-      // connection errors have a handler while the handshake is pending.
-      _subscription = session.messages.listen(
-        (raw) {
-          if (_current(generation)) _receive(raw);
-        },
-        onError: (Object error) {
-          if (_current(generation)) {
-            final failure = ConnectionFailure.classify(
-              error,
-              device: 'la laptop',
-            );
-            unawaited(
-              _lost(
-                failure.humanMessage,
-                code: failure.code,
-                technical: failure.technicalMessage,
-              ),
-            );
-          }
-        },
-        onDone: () {
-          if (_current(generation)) {
-            unawaited(
-              _lost(
-                'La laptop cerró la conexión de visión.',
-                code: 'REMOTE_CLOSED',
-                technical: 'WebSocket stream completed',
-              ),
-            );
-          }
-        },
-      );
-      await session.ready.timeout(connectionTimeout);
+      await _closeSocket();
       if (!_current(generation)) return;
-      _transportOpen = true;
-      _phase = _protocolReadyReceived ? 'connected' : 'waiting_ready';
-      _connectedAt = _now();
-      _lastPingAt = null;
+      if (!discoveryFirst && RemoteVisionService.isValidUrl(knownUrl)) {
+        if (await _attemptWebsocket(
+          VisionEndpoint.parse(knownUrl),
+          generation,
+          rawValue: knownUrl,
+        )) {
+          return;
+        }
+      } else if (!discoveryFirst && knownUrl.isNotEmpty) {
+        _recordFailure(
+          FormatException('URL Vision inválida: $knownUrl'),
+          StackTrace.current,
+          category: 'URI inválida',
+        );
+      }
+      if (!_current(generation)) return;
+      _isDiscovering = true;
+      _discoveryStatus = 'Buscando por UDP';
+      _detectedUrl = null;
+      _log('Buscando visor por UDP :4211');
+      notifyListeners();
+      if (!_current(generation)) return;
+      Uri? candidate;
+      try {
+        candidate = await _discovery.discover();
+      } catch (error) {
+        _log('Error de discovery: $error');
+      }
+      if (!_current(generation)) return;
+      _isDiscovering = false;
+      _discoveryStatus = candidate == null
+          ? 'No encontrado'
+          : 'Candidato · esperando vision.ready';
+      _detectedUrl = candidate?.toString();
+      if (candidate != null) {
+        candidate = VisionEndpoint.parse(candidate.toString());
+        _detectedUrl = candidate.toString();
+        _phase(VisionNetworkPhase.discovered);
+        _log(
+          'VISION_DISCOVERY source IP=${candidate.host} port=${candidate.port} URI=$candidate',
+        );
+      }
+      notifyListeners();
+      if (candidate != null && await _attemptWebsocket(candidate, generation)) {
+        if (_current(generation) && state.isConnected) {
+          _discoveryStatus = 'Visor validado';
+          _persistingUrl = candidate.toString();
+          try {
+            await _settings.setVisionWebsocketUrl(_persistingUrl!);
+          } catch (error) {
+            _log('Conectado; no se pudo guardar la URL: $error');
+            if (_current(generation)) {
+              _set(
+                state.copyWith(
+                  error: 'Conectado; no se pudo guardar la dirección.',
+                ),
+              );
+            }
+          } finally {
+            _persistingUrl = null;
+          }
+        }
+        return;
+      }
+      if (!_current(generation)) return;
+      if (candidate != null) _discoveryStatus = 'Candidato sin vision.ready';
       _set(
         state.copyWith(
-          connection: VisionConnection.connected,
-          clearError: true,
+          connection: VisionConnection.disconnected,
+          status: state.status.merge(const VisionStatus(ready: false)),
+          stale: true,
+          error:
+              state.error ??
+              'Visor no encontrado o sin vision.ready. Conserva o configura la URL manual.',
         ),
       );
-      _log(
-        _protocolReadyReceived
-            ? 'WebSocket de visión abierto y vision.ready confirmado.'
-            : 'WebSocket de visión abierto. Esperando vision.ready.',
-        technical:
-            'transport=open protocol_ready=$_protocolReadyReceived timeout=${readyTimeout.inMilliseconds}ms',
-      );
-      if (_protocolReadyReceived) {
-        _finishReady(true);
-      } else {
-        _readyTimer = Timer(readyTimeout, () {
-          if (!_current(generation) || _protocolReadyReceived) return;
-          unawaited(
-            _lost(
-              'Se abrió el WebSocket de la laptop, pero el Vision Server no confirmó vision.ready. Comprueba el servidor y su protocolo.',
-              code: 'READY_TIMEOUT',
-              technical:
-                  'transport=open protocol_ready=false timeout=${readyTimeout.inMilliseconds}ms',
-            ),
-          );
-        });
-      }
-      _timer = Timer.periodic(tickInterval, (_) => _tick());
-      ping();
-    } catch (error) {
+      _scheduleRetry();
+    } finally {
       if (_current(generation)) {
-        final failure = ConnectionFailure.classify(error, device: 'la laptop');
-        await _lost(
-          failure.humanMessage,
-          code: failure.code,
-          technical:
-              '${failure.technicalMessage} timeout=${connectionTimeout.inMilliseconds}ms',
-        );
+        _flowActive = false;
+        notifyListeners();
       }
     }
   }
 
-  /// Validates this independent vision link without sending motor commands.
-  Future<bool> testConnection() async {
-    if (_disposed || _inactive) return false;
-    if (state.ready) return true;
-    if (!state.isConnected && !isConnecting) unawaited(connect());
-    if (_disposed || _inactive || !_desiredConnection) return false;
-    final outcome = _readyOutcome;
-    if (outcome == null) return false;
-    final generation = _generation;
-    final ready = await outcome.future;
-    return ready && _current(generation) && !_inactive && state.ready;
+  Future<bool> _attemptWebsocket(
+    Uri uri,
+    int generation, {
+    String? rawValue,
+  }) async {
+    if (!_current(generation)) return false;
+    await _closeSocket();
+    if (!_current(generation)) return false;
+    uri = VisionEndpoint.parse(uri.toString());
+    final socketGeneration = _socketGeneration;
+    final handshake = Completer<bool>();
+    _pendingHandshake = handshake;
+    _connectionUrl = uri.toString();
+    ++_connectionAttempt;
+    // Each candidate is a new session, never reuse previous telemetry.
+    _set(const VisionState(connection: VisionConnection.connecting));
+    _phase(VisionNetworkPhase.connecting);
+    _log(
+      'VISION_WS_CONNECT attempt=$_connectionAttempt\n'
+      'raw value: ${rawValue ?? uri}\nparsed URI: $uri\n'
+      'scheme: ${uri.scheme}\nhost: ${uri.host}\nport: ${uri.port}\n'
+      'path: ${uri.path}\nquery: ${uri.query}\nfragment: ${uri.fragment}',
+    );
+    bool currentSocket() =>
+        _current(generation) && socketGeneration == _socketGeneration;
+    void failed(Object error, StackTrace stack, {String? category}) {
+      if (!currentSocket()) return;
+      _recordFailure(error, stack, category: category);
+      final reason = _lastFailure!.summary;
+      if (_pendingHandshake != null) {
+        _set(state.copyWith(error: reason));
+        unawaited(_closeSocket());
+      } else {
+        unawaited(_lost(reason));
+      }
+    }
+
+    if (!currentSocket()) return handshake.future;
+    try {
+      final session = _service.open(uri);
+      _session = session;
+      _subscription = session.messages.listen(
+        (raw) {
+          if (currentSocket()) _receive(raw);
+        },
+        onError: (Object error, StackTrace stack) {
+          failed(error, stack);
+        },
+        onDone: () => failed(
+          StateError(
+            'Vision Server desconectado; closeCode=${session.closeCode}; '
+            'closeReason=${session.closeReason}',
+          ),
+          StackTrace.current,
+          category: 'Socket cerrado',
+        ),
+      );
+      _handshakeTimer = Timer(
+        connectionTimeout,
+        () => failed(
+          TimeoutException(
+            _transportReady
+                ? 'Esperando hello/vision.ready/heartbeat; estado=${_networkPhase.label}'
+                : 'Timeout TCP/upgrade WebSocket',
+            connectionTimeout,
+          ),
+          StackTrace.current,
+          category: _transportReady
+              ? 'Timeout protocolo JSON v1'
+              : 'Timeout TCP/upgrade',
+        ),
+      );
+      unawaited(
+        session.ready.then<void>((_) {
+          if (!currentSocket()) return;
+          _transportReady = true;
+          _phase(VisionNetworkPhase.socketConnected);
+          _waitingPhase();
+          _completeHandshake();
+        }, onError: (Object error, StackTrace stack) => failed(error, stack)),
+      );
+    } catch (error, stack) {
+      failed(error, stack);
+    }
+    return handshake.future;
+  }
+
+  void _completeHandshake() {
+    final handshake = _pendingHandshake;
+    if (handshake == null ||
+        !_transportReady ||
+        !_helloReceived ||
+        !_serverReady ||
+        !_heartbeatReceived ||
+        state.status.ready != true) {
+      return;
+    }
+    _pendingHandshake = null;
+    _handshakeTimer?.cancel();
+    _handshakeTimer = null;
+    _connectedAt = _now();
+    _lastPingAt = null;
+    _attempt = 0;
+    _phase(VisionNetworkPhase.ready);
+    final socketGeneration = _socketGeneration;
+    _set(
+      state.copyWith(connection: VisionConnection.connected, clearError: true),
+    );
+    if (_disposed || socketGeneration != _socketGeneration) {
+      if (!handshake.isCompleted) handshake.complete(false);
+      return;
+    }
+    _log(
+      'Visor validado con vision.hello + vision.ready + heartbeat: $_connectionUrl',
+    );
+    _timer = Timer.periodic(tickInterval, (_) => _tick());
+    ping();
+    if (!handshake.isCompleted) handshake.complete(state.isConnected);
   }
 
   Future<void> disconnect() async {
     _desiredConnection = false;
-    _connectOnResume = false;
     _retry?.cancel();
     _attempt = 0;
     ++_generation;
-    _phase = 'disconnected';
-    _transportOpen = false;
-    _protocolReadyReceived = false;
-    _finishReady(false);
-    final closing = _close();
-    _log('Visión desconectada por el usuario.');
+    _flowActive = false;
+    _discovery.cancel();
+    if (_isDiscovering) _discoveryStatus = 'Búsqueda cancelada';
+    _isDiscovering = false;
+    _connectionUrl = null;
+    _phase(VisionNetworkPhase.disconnected);
     _set(
       state.copyWith(
         connection: VisionConnection.disconnected,
@@ -240,7 +386,7 @@ class VisionController extends ChangeNotifier {
         reportStale: state.lastReport != null,
       ),
     );
-    await closing;
+    await _close();
   }
 
   Future<void> reconnect() async {
@@ -260,7 +406,6 @@ class VisionController extends ChangeNotifier {
     final id = 'mobile-${now.microsecondsSinceEpoch}-${++_commandId}';
     try {
       _session!.send(command, id, now);
-      _lastCommand = command.wireName;
       if (command == VisionCommand.ping) {
         _lastPingAt = now;
         _pings[id] = now;
@@ -268,30 +413,23 @@ class VisionController extends ChangeNotifier {
           _pings.remove(_pings.keys.first);
         }
       }
-      if (command == VisionCommand.ping) {
-        _sampleLog('TX ${command.wireName}');
-      } else {
-        _log('TX ${command.wireName}');
-      }
-    } catch (error) {
-      final failure = ConnectionFailure.classify(error, device: 'la laptop');
-      unawaited(
-        _lost(
-          failure.humanMessage,
-          code: failure.code,
-          technical: '${command.wireName}: ${failure.technicalMessage}',
-        ),
-      );
+      _log('TX ${command.wireName}');
+    } catch (error, stack) {
+      _recordFailure(error, stack, category: 'Envío WebSocket');
+      unawaited(_lost('Error enviando ${command.wireName}: $error'));
     }
   }
 
   void _receive(Object? raw) {
     final result = _parser.parse(raw);
     if (result.error != null) {
-      const human =
-          'La laptop envió un mensaje de visión inválido. Revisa el protocolo del Vision Server.';
-      _recordFailure('INVALID_PROTOCOL_MESSAGE', human, result.error!);
-      _set(state.copyWith(error: human));
+      _recordFailure(
+        FormatException(result.error!),
+        StackTrace.current,
+        category: 'Protocolo JSON inválido',
+      );
+      _log('RX rechazado: ${result.error}');
+      _set(state.copyWith(error: result.error));
       return;
     }
     if (result.ignored) {
@@ -299,27 +437,28 @@ class VisionController extends ChangeNotifier {
       return;
     }
     final message = result.message!;
+    if (_pendingHandshake != null &&
+        message.type == VisionMessageType.ready &&
+        !_helloReceived) {
+      _recordFailure(
+        const FormatException('vision.ready llegó antes de vision.hello'),
+        StackTrace.current,
+        category: 'Orden de protocolo inválido',
+      );
+      _set(state.copyWith(error: _lastFailure!.summary));
+      return;
+    }
+    if (message.type == VisionMessageType.hello) _helloReceived = true;
+    if (message.type == VisionMessageType.ready) {
+      _serverReady = message.status.ready == true;
+    }
+    if (message.type == VisionMessageType.heartbeat &&
+        _helloReceived &&
+        _serverReady) {
+      _heartbeatReceived = true;
+    }
     final now = _now();
     var status = state.status.merge(message.status);
-    if (message.type == VisionMessageType.ready &&
-        message.status.ready == true) {
-      _connectedAt = now;
-      _protocolReadyReceived = true;
-      _readyTimer?.cancel();
-      _attempt = 0;
-      if (_transportOpen) {
-        _phase = 'connected';
-        _finishReady(true);
-      }
-      _log(
-        'Vision Server confirmó vision.ready.',
-        level: ConnectionLogLevel.success,
-      );
-    }
-    // A status or heartbeat cannot substitute the protocol handshake.
-    if (!_protocolReadyReceived) {
-      status = status.merge(const VisionStatus(ready: false));
-    }
     if (message.replyTo != null) {
       final sent = _pings.remove(message.replyTo);
       if (sent != null) {
@@ -331,9 +470,6 @@ class VisionController extends ChangeNotifier {
       }
     }
     final heartbeat = message.type == VisionMessageType.heartbeat;
-    if (heartbeat && _protocolReadyReceived && status.ready == true) {
-      _phase = 'connected';
-    }
     final report = message.report;
     // Late/replayed reports must never replace newer coordinates.
     final oldReport =
@@ -356,24 +492,17 @@ class VisionController extends ChangeNotifier {
             ? null
             : _age(accepted.timestamp) > _timeout,
         alerts: oldReport ? null : message.alerts,
-        error: message.error == null
-            ? null
-            : 'El Vision Server informó un error. Consulta los detalles técnicos en Diagnósticos.',
+        error: message.error,
         clearError: message.type != VisionMessageType.error,
       ),
     );
-    if (message.error != null) {
-      _recordFailure(
-        'VISION_SERVER_ERROR',
-        'El Vision Server informó un error.',
-        message.error!,
-      );
+    if (_pendingHandshake != null) {
+      _waitingPhase();
+      _completeHandshake();
+    } else if (state.isConnected) {
+      _phase(VisionNetworkPhase.ready);
     }
-    if (heartbeat || message.type == VisionMessageType.report) {
-      _sampleLog('RX ${message.type.wireName}');
-    } else {
-      _log('RX ${message.type.wireName}');
-    }
+    _log('RX ${message.type.wireName}');
   }
 
   Duration get _timeout => _settings.settings.visionHeartbeatTimeout;
@@ -388,15 +517,15 @@ class VisionController extends ChangeNotifier {
     final age = state.lastReport == null
         ? null
         : _age(state.lastReport!.timestamp);
-    final stale =
-        _protocolReadyReceived && baseline != null && _age(baseline) > _timeout;
-    if (stale && !state.stale) {
-      _phase = _protocolReadyReceived ? 'heartbeat_stale' : 'waiting_ready';
+    final stale = baseline != null && _age(baseline) >= _timeout;
+    if (stale) {
       _recordFailure(
-        'HEARTBEAT_TIMEOUT',
-        'La laptop dejó de enviar el heartbeat de visión. Sus datos pueden estar desactualizados.',
-        'heartbeat_age=${_age(baseline).inMilliseconds}ms timeout=${_timeout.inMilliseconds}ms',
+        TimeoutException('Heartbeat de visión vencido', _timeout),
+        StackTrace.current,
+        category: 'Heartbeat timeout posterior',
       );
+      unawaited(_lost(_lastFailure!.summary));
+      return;
     }
     _set(
       state.copyWith(
@@ -411,25 +540,11 @@ class VisionController extends ChangeNotifier {
     if (_lastPingAt == null || _age(_lastPingAt!) >= interval) ping();
   }
 
-  Future<void> _lost(
-    String error, {
-    required String code,
-    required String technical,
-  }) async {
+  Future<void> _lost(String error) async {
     if (_disposed) return;
-    final failurePhase = _phase;
     ++_generation;
-    _transportOpen = false;
-    _protocolReadyReceived = false;
-    _phase = 'error';
-    _finishReady(false);
-    final closing = _close();
-    _recordFailure(
-      code,
-      error,
-      '$technical phase=$failurePhase',
-      eventPhase: failurePhase,
-    );
+    _flowActive = false;
+    _log(error);
     _set(
       state.copyWith(
         connection: VisionConnection.disconnected,
@@ -437,16 +552,20 @@ class VisionController extends ChangeNotifier {
         stale: true,
         reportStale: state.lastReport != null,
         error: error,
+        reportAge: state.lastReport == null
+            ? null
+            : _age(state.lastReport!.timestamp),
       ),
     );
     // Schedule synchronously; cancellation by user/settings/lifecycle wins.
     _scheduleRetry();
-    await closing;
+    await _close();
   }
 
   void _scheduleRetry() {
     _retry?.cancel();
     if (!_desiredConnection ||
+        _diagnosticMode ||
         _inactive ||
         !_settings.settings.visionAutoReconnect) {
       return;
@@ -458,12 +577,9 @@ class VisionController extends ChangeNotifier {
       ),
     );
     ++_attempt;
-    _phase = 'reconnecting';
+    _phase(VisionNetworkPhase.reconnecting);
     _set(state.copyWith(connection: VisionConnection.reconnecting));
-    _log(
-      'Reconexión en ${delay.inMilliseconds} ms',
-      technical: 'delay=${delay.inMilliseconds}ms attempt=$_attempt',
-    );
+    _log('Reconexión en ${delay.inMilliseconds} ms');
     _retry = Timer(delay, () {
       if (_disposed || !_desiredConnection || _inactive) return;
       _set(state.copyWith(connection: VisionConnection.disconnected));
@@ -472,41 +588,47 @@ class VisionController extends ChangeNotifier {
   }
 
   Future<void> _close() async {
-    _readyTimer?.cancel();
-    _readyTimer = null;
+    await _closeSocket();
+  }
+
+  Future<void> _closeSocket() {
+    ++_socketGeneration;
+    _handshakeTimer?.cancel();
+    _handshakeTimer = null;
+    final handshake = _pendingHandshake;
+    _pendingHandshake = null;
+    if (handshake != null && !handshake.isCompleted) handshake.complete(false);
+    _transportReady = false;
+    _serverReady = false;
+    _helloReceived = false;
+    _heartbeatReceived = false;
     _timer?.cancel();
     _timer = null;
     _pings.clear();
     final subscription = _subscription;
     final session = _session;
-    final closePhase = _phase;
     _subscription = null;
     _session = null;
-    if (subscription != null) {
-      try {
-        await subscription.cancel();
-      } catch (error, stackTrace) {
-        _log(
-          'No se pudo cancelar la recepción de la conexión anterior de visión.',
-          technical: '${error.runtimeType}: $error\n$stackTrace',
-          errorCode: 'SUBSCRIPTION_CLOSE_FAILED',
-          eventPhase: closePhase,
-          level: ConnectionLogLevel.warning,
-        );
-      }
-    }
-    if (session != null) {
-      try {
-        await session.close().timeout(const Duration(seconds: 2));
-      } catch (error, stackTrace) {
-        _log(
-          'No se pudo completar el cierre del WebSocket de visión. La conexión anterior ya fue descartada.',
-          technical: '${error.runtimeType}: $error\n$stackTrace',
-          errorCode: 'SOCKET_CLOSE_FAILED',
-          eventPhase: closePhase,
-          level: ConnectionLogLevel.warning,
-        );
-      }
+    // Invoke close now to abort TCP/upgrade before waiting for stream cleanup.
+    final closingSession = session == null
+        ? Future<void>.value()
+        : _ignoreCloseError(session.close());
+    final cancelling = subscription == null
+        ? Future<void>.value()
+        : _ignoreCloseError(subscription.cancel());
+    _closing = Future.wait<void>([
+      _closing,
+      closingSession,
+      cancelling,
+    ]).then((_) {});
+    return _closing;
+  }
+
+  Future<void> _ignoreCloseError(Future<void> closing) async {
+    try {
+      await closing;
+    } catch (_) {
+      /* The peer may already be gone. */
     }
   }
 
@@ -515,23 +637,18 @@ class VisionController extends ChangeNotifier {
     final previous = _previousSettings;
     _previousSettings = next;
     if (next.visionWebsocketUrl != previous.visionWebsocketUrl) {
+      if (next.visionWebsocketUrl == _persistingUrl) return;
+      final wanted = _desiredConnection;
       final closing = disconnect();
       final generation = _generation;
-      final hasEndpoint = next.visionWebsocketUrl.trim().isNotEmpty;
-      _desiredConnection = hasEndpoint;
-      _connectOnResume = hasEndpoint && _inactive;
-      _log('Dirección de visión actualizada.');
       unawaited(
         closing.then((_) {
-          if (hasEndpoint && !_inactive && _current(generation)) {
-            return connect();
-          }
+          if (wanted && _current(generation)) return connect();
         }),
       );
     } else if (!next.visionAutoReconnect) {
       _retry?.cancel();
       if (state.connection == VisionConnection.reconnecting) {
-        _phase = 'disconnected';
         _set(state.copyWith(connection: VisionConnection.disconnected));
       }
     } else if (!previous.visionAutoReconnect &&
@@ -544,15 +661,15 @@ class VisionController extends ChangeNotifier {
   }
 
   void handleAppInactive() {
+    if (_disposed || _inactive) return;
     _inactive = true;
     _retry?.cancel();
     ++_generation;
-    _transportOpen = false;
-    _protocolReadyReceived = false;
-    _phase = 'background';
-    _finishReady(false);
-    final closing = _close();
-    _log('Visión pausada al pasar la aplicación a segundo plano.');
+    _flowActive = false;
+    _discovery.cancel();
+    if (_isDiscovering) _discoveryStatus = 'Búsqueda cancelada';
+    _isDiscovering = false;
+    _phase(VisionNetworkPhase.disconnected);
     _set(
       state.copyWith(
         connection: VisionConnection.disconnected,
@@ -560,89 +677,74 @@ class VisionController extends ChangeNotifier {
         stale: true,
       ),
     );
-    unawaited(closing);
+    unawaited(_close());
   }
 
   void handleAppResumed() {
+    if (_disposed) return;
     _inactive = false;
-    if (_connectOnResume ||
-        (_desiredConnection && _settings.settings.visionAutoReconnect)) {
-      _connectOnResume = false;
+    if (_desiredConnection &&
+        !_diagnosticMode &&
+        _settings.settings.visionAutoReconnect) {
       unawaited(connect());
     }
   }
 
   bool _current(int generation) => !_disposed && generation == _generation;
+
+  void _waitingPhase() {
+    if (_pendingHandshake == null || !_transportReady) return;
+    _phase(
+      !_helloReceived
+          ? VisionNetworkPhase.waitingHello
+          : !_serverReady
+          ? VisionNetworkPhase.waitingReady
+          : VisionNetworkPhase.waitingHeartbeat,
+    );
+  }
+
+  void _phase(VisionNetworkPhase phase) {
+    if (_networkPhase == phase) return;
+    _log(
+      'VISION_STATE ${_networkPhase.label} -> ${phase.label} attempt=$_connectionAttempt',
+    );
+    _networkPhase = phase;
+  }
+
+  void _recordFailure(Object error, StackTrace stack, {String? category}) {
+    final failure = VisionNetworkFailure(
+      error: error,
+      stack: stack,
+      uri: _connectionUrl ?? endpoint,
+      timestamp: _now(),
+      attempt: _connectionAttempt,
+      previousState: _networkPhase.label,
+      category: category,
+    );
+    _firstFailure ??= failure;
+    _lastFailure = failure;
+    _log(failure.toString());
+    _phase(VisionNetworkPhase.error);
+  }
+
   void _set(VisionState next) {
     if (_disposed) return;
     _state = next;
     notifyListeners();
   }
 
-  void _finishReady(bool ready) {
-    final outcome = _readyOutcome;
-    if (outcome != null && !outcome.isCompleted) outcome.complete(ready);
-  }
-
-  void _recordFailure(
-    String code,
-    String human,
-    String technical, {
-    String? eventPhase,
-  }) {
-    _lastErrorCode = code;
-    _lastTechnicalError = redactConnectionText(technical);
-    _log(
-      human,
-      technical: technical,
-      errorCode: code,
-      level: ConnectionLogLevel.error,
-      eventPhase: eventPhase,
-    );
-  }
-
-  void _sampleLog(String event) {
-    final now = _now();
-    final count = (_sampledCounts[event] ?? 0) + 1;
-    _sampledCounts[event] = count;
-    final last = _sampledLast[event];
-    if (last != null && now.difference(last) < const Duration(seconds: 10)) {
-      return;
-    }
-    _sampledLast[event] = now;
-    _log(event, technical: 'sample_interval=10s session_count=$count');
-  }
-
-  void _log(
-    String message, {
-    String technical = '',
-    String? errorCode,
-    ConnectionLogLevel level = ConnectionLogLevel.info,
-    String? eventPhase,
-  }) {
-    _connectionLog.add(
-      channel: ConnectionChannel.vision,
-      level: level,
-      humanMessage: message,
-      technicalMessage: technical,
-      errorCode: errorCode,
-      endpoint: endpoint,
-      phase: eventPhase ?? _phase,
-      attempt: _connectionAttempt,
-    );
-    _diagnostics.insert(
-      0,
-      '${_now().toIso8601String()} ${redactConnectionText(message)}',
-    );
+  void _log(String message) {
+    _diagnostics.insert(0, '${_now().toIso8601String()} $message');
     if (_diagnostics.length > 80) _diagnostics.removeLast();
+    debugPrint('[VISION] ${_diagnostics.first}');
   }
 
   @override
   void dispose() {
     _disposed = true;
     ++_generation;
-    _finishReady(false);
     _settings.removeListener(_settingsChanged);
+    _discovery.dispose();
     _retry?.cancel();
     unawaited(_close());
     super.dispose();

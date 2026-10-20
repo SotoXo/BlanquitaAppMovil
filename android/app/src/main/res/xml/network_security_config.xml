@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <!-- The single ESP32 serves local ws:// on the external CARTESIANO LAN. -->
+    <!-- ESP32 uses local ws:// on a hotspot or router with a DHCP address. -->
     <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

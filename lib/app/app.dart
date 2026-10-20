@@ -36,6 +36,10 @@ class BlanquitaApp extends StatefulWidget {
 class _BlanquitaAppState extends State<BlanquitaApp>
     with WidgetsBindingObserver {
   late final WifiNetworkController _wifiController;
+  Timer? _startupTimer;
+  bool _startupPending = false;
+  bool _inactive = false;
+
   @override
   void initState() {
     super.initState();
@@ -50,21 +54,19 @@ class _BlanquitaAppState extends State<BlanquitaApp>
           'Dos clientes WebSocket independientes; red esperada CARTESIANO',
     );
     if (widget.autoConnect) {
-      Future<void>.delayed(const Duration(milliseconds: 450), () {
-        if (mounted) {
-          if (widget.settingsController.settings.websocketUrl.isNotEmpty) {
-            widget.machineController.connect();
-          }
-          if (widget
-              .settingsController
-              .settings
-              .visionWebsocketUrl
-              .isNotEmpty) {
-            widget.visionController.connect();
-          }
-        }
+      _startupPending = true;
+      _startupTimer = Timer(const Duration(milliseconds: 450), () {
+        if (mounted && !_inactive) _startConnections();
       });
     }
+  }
+
+  void _startConnections() {
+    _startupPending = false;
+    _startupTimer?.cancel();
+    // Empty endpoints enter discovery; neither flow waits for the other.
+    unawaited(widget.machineController.connect());
+    unawaited(widget.visionController.connect());
   }
 
   @override
@@ -79,10 +81,13 @@ class _BlanquitaAppState extends State<BlanquitaApp>
     );
     if (state == AppLifecycleState.resumed) {
       unawaited(_wifiController.start());
+      _inactive = false;
       widget.machineController.handleAppResumed();
       widget.visionController.handleAppResumed();
+      if (_startupPending) _startConnections();
     } else {
       unawaited(_wifiController.pause());
+      _inactive = true;
       widget.machineController.handleAppInactive();
       widget.visionController.handleAppInactive();
     }
@@ -105,10 +110,11 @@ class _BlanquitaAppState extends State<BlanquitaApp>
           value: widget.visionController,
         ),
       ],
-      child: Consumer<SettingsController>(
-        builder: (context, controller, _) {
-          final settings = controller.settings;
-          final overlays = settings.themeMode == ThemeMode.light
+      child: Selector<SettingsController, ThemeMode>(
+        selector: (_, controller) => controller.settings.themeMode,
+        child: const MainShell(),
+        builder: (context, themeMode, shell) {
+          final overlays = themeMode == ThemeMode.light
               ? SystemUiOverlayStyle.dark
               : SystemUiOverlayStyle.light;
           return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -159,6 +165,7 @@ class _BlanquitaAppState extends State<BlanquitaApp>
 
   @override
   void dispose() {
+    _startupTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _wifiController.dispose();
     widget.machineController.dispose();

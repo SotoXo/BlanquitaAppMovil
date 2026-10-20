@@ -7,19 +7,19 @@ Decisiones consultadas antes de implementar:
 
 La laptop percibe, el móvil supervisa y el ESP32 ejecuta y protege. En esta fase
 visión informa exclusivamente. No hay AutomationCoordinator, SafetyGate, control
-de motores desde visión, procesamiento de cámara, IA ni discovery de laptop.
+de motores desde visión, procesamiento de cámara ni IA. El discovery de laptop
+ahora está implementado; su contrato externo está en [vision-discovery.md](vision-discovery.md).
 
 ## Arquitectura
 
 ```text
+VisionDiscoveryService (UDP 4211) → /vision → WebSocket + hello + ready + heartbeat
 Laptop WebSocket → RemoteVisionService / VisionSession
                 → VisionProtocolParser / modelos
                 → VisionController (ChangeNotifier)
                 → VisionState → Provider → pantallas
 
-MachineController → WebSocket ESP32 configurado → READY
-
-Ambos controladores → ConnectionLog → Diagnósticos / portapapeles
+MachineController → WebSocket ESP32 + discovery UDP (sin cambios)
 ```
 
 VisionController se crea en main y vive con BlanquitaApp. Cambiar entre Inicio,
@@ -28,21 +28,24 @@ controlador por separado y conserva el comportamiento de seguridad del ESP32.
 
 ## Conexión
 
-1. Configurar URL en Ajustes → Conexión visión, por ejemplo
-   `ws://<IP-laptop>:8765/` o `wss://<host>/vision`. No hay IP predeterminada.
-   El log de servidor aportado después indica escucha en `0.0.0.0:8765`;
-   usar su IP LAN real como destino, no `0.0.0.0`. Esta evidencia actual reemplaza
-   el puerto 6580 mencionado previamente. No se utiliza el anuncio de descubrimiento
-   del servidor para localizar la laptop: se configura su URL WebSocket.
-2. Pulsar Conectar. Se abre un socket exclusivo de visión con timeout de 8 s.
-3. WebSocket conectado y Vision Server ready son estados distintos. La apertura
-   del transporte inicia la espera de `vision.ready`, sin asumir validación.
-   `vision.ready` con payload vacío comunica ready; `ready: false` lo revoca.
+1. La URL manual en Ajustes → Conexión visión sigue disponible, por ejemplo
+   `ws://<IP-laptop>:8765/vision`. No hay IP predeterminada. VisionEndpoint
+   centraliza construcción y normalización; las URLs históricas con `/`,
+   `/vision/` o `/#/vision` se migran a `/vision`. No se acepta HTTP/HTTPS/WSS.
+2. Pulsar Conectar: primero URL guardada, luego discovery UDP si falla. Al iniciar
+   se ejecuta este flujo aunque no haya URL persistida. Cada candidato tiene
+   timeout de 8 s para abrir el socket y recibir hello, ready y heartbeat válidos.
+3. Abrir TCP/WebSocket no valida la conexión. Se requiere `vision.hello`, luego
+   `vision.ready` del protocolo correcto y versión 1, y después heartbeat.
+   Payload vacío comunica ready y `ready: false` no valida. Tras conectar,
+   `ready: false` puede revocar disponibilidad.
 4. Recibir JSON, validar envelope y campos conocidos, actualizar telemetría.
 5. Iniciar visor / Detener visor / Ping solo envían `vision.start`,
    `vision.stop`, `vision.ping`; no cambian la telemetría de forma optimista.
 6. Desconectar cancela los reintentos. Cambiar URL reemplaza la sesión activa y
-   limpia la telemetría anterior. Volver a abrir la app conecta si hay una URL.
+   limpia la telemetría anterior. Solo candidatos con handshake completo se persisten.
+   Buscar visor inicia por UDP; Buscar dispositivos inicia ambos controladores
+   independientemente. Ningún candidato fallido reemplaza la URL manual.
 
 Una conexión puede estar activa mientras la otra está desconectada. Un reporte,
 error, heartbeat vencido o desconexión de visión jamás llama a MachineController.
@@ -132,9 +135,11 @@ crudos ni payload de motores mediante el API de transporte.
 ## Heartbeat, reportes y latencia
 
 - `lastHeartbeat` registra recepción local de un `vision.heartbeat` válido.
-- Hasta el primer heartbeat, el timeout empieza al conectar el socket.
-- El estado se revisa cada segundo. Tras superar el timeout, `stale = true` y
-  ready efectivo es false. El socket permanece abierto para recuperar heartbeat.
+- El primer heartbeat forma parte de la validación inicial, después de hello/ready.
+- Heartbeat del desktop cada 2 s; stale predeterminado al alcanzar 6 s.
+- El estado se revisa cada segundo. Al alcanzar el timeout, `stale = true` y
+  ready efectivo es false. Se cierra la sesión y se activa recuperación con
+  backoff, URL conocida y luego discovery si la URL falla.
 - Reportes/status no sustituyen al heartbeat. Un heartbeat fresco elimina stale,
   pero no hace reciente un reporte antiguo.
 - `reportAge` usa el timestamp del reporte; `reportStale` utiliza el mismo timeout
@@ -150,18 +155,14 @@ crudos ni payload de motores mediante el API de transporte.
 ## Reconexión y lifecycle
 
 Con reconexión habilitada, errores de transporte y cierre remoto reintentan en
-1, 2, 4, 8, 16 y hasta 30 s. El contador se reinicia al recibir `vision.ready`,
-no al abrir TCP ni al recibir un heartbeat. Los cambios de ajuste y desconexión manual cancelan
+1, 2, 4, 8, 16 y hasta 30 s. Cada ciclo prueba primero la URL conocida y después
+discovery UDP. El contador se reinicia al validar `vision.ready`, no simplemente
+al abrir TCP. Los cambios de ajuste y desconexión manual cancelan
 reintentos pendientes. Intentos obsoletos no pueden reactivar una sesión cancelada.
 
 Al salir del primer plano se cierra visión y se marca stale. Al volver se intenta
 conectar si la sesión era deseada y la reconexión está habilitada. Si el usuario
 había desconectado, no se abre automáticamente.
-
-Editar explícitamente la URL inicia una conexión al nuevo endpoint aunque la
-reconexión automática esté desactivada. Si la edición ocurre en segundo plano,
-ese intento explícito se conserva para el siguiente regreso al primer plano.
-Desconectar manualmente vuelve a cancelar el deseo de conexión.
 
 ## Ajustes y UI
 
@@ -171,10 +172,11 @@ SharedPreferences existentes persisten:
 | --- | --- | --- |
 | `visionWebsocketUrl` | `vision.websocket_url` | vacío |
 | `visionAutoReconnect` | `vision.auto_reconnect` | true |
-| `visionHeartbeatTimeout` | `vision.heartbeat_timeout_ms` | 5000 ms |
+| `visionHeartbeatTimeout` | `vision.heartbeat_timeout_ms` | 6000 ms |
 | `visionMinimumConfidence` | `vision.minimum_confidence` | 0.8 |
 
-Timeout permitido: 1–60 s; confianza: 0–1. La confianza mínima únicamente genera
+Timeout permitido: 6–60 s; valores guardados inferiores se migran a 6 s.
+Confianza: 0–1. La confianza mínima únicamente genera
 un aviso; no elimina reportes ni autoriza acciones físicas. Se eliminaron los
 ajustes antiguos de cámara local/FPS objetivo y las interfaces CameraFrameSource,
 VisionDetector y VisionService. PositionEstimate se conserva sin cambios.
@@ -182,19 +184,8 @@ VisionDetector y VisionService. PositionEstimate se conserva sin cambios.
 Visión muestra conexión, ready, cámara/nombre, detector, calibración, FPS, latencia,
 objeto, coordenadas, confianza, edad y alertas usando las superficies Liquid Glass
 existentes. Sin reportes muestra **Sin datos de visión**. Inicio añade un resumen
-breve. Diagnósticos separa **ESP32 · CONTROL** y **Laptop · VISIÓN** con tarjetas de
-transporte y protocolo. La bitácora central reúne ambos canales, eventos de sistema,
-error humano y detalle técnico desplegable. **COPIAR BITÁCORA** exporta estado
-y eventos; **LIMPIAR** borra eventos en memoria sin alterar conexiones. No se usa
-SharedPreferences como historial. Ver la [guía de arquitectura](network-architecture.md).
-
-La recepción de telemetría actualiza el estado en cada mensaje válido. Para evitar
-que el historial central desplace los fallos con tráfico repetido, TX `vision.ping`,
-RX `vision.heartbeat` y RX `vision.report` se registran por muestreo: la primera
-entrada y luego como máximo una cada 10 segundos por tipo, con `session_count`
-acumulado en el detalle técnico. El muestreo no reduce la frecuencia de envío,
-recepción ni actualización de telemetría. Los errores y cambios de conexión
-mantienen registro individual. La bitácora central conserva hasta 240 entradas.
+breve. Diagnósticos separa **ESP32 · Control** y **Laptop · Visión** con eventos
+limitados a 80 entradas en memoria; no usa SharedPreferences como historial.
 
 ## Validación
 
@@ -209,6 +200,54 @@ lifecycle, cancelación de handshake, ajustes, ambos controladores independiente
 WebSocket real en loopback y navegación. Las pruebas del ESP32 se conservan.
 La prueba loopback no sustituye la comprobación final con la laptop y el robot.
 
-Los resultados actuales y la comprobación con hardware se mantienen en
-[network-architecture.md](network-architecture.md). Los conteos/rutas de
-compilaciones históricas no verifican la implementación de esta rama.
+Resultados de la fase inicial, anteriores a discovery (6 de octubre de 2026):
+
+- `flutter analyze`: **No issues found**.
+- `flutter test`: **57 pruebas correctas**, incluidas todas las pruebas existentes
+  de ESP32 y una prueba de monitor/ajustes a 390 × 844 sin errores de layout.
+- `flutter build apk --debug`: **correcto**, Gradle assembleDebug en 17,3 s.
+- APK: `C:\Users\Usuario\Documents\Flutter proyects\blanquita\build\app\outputs\flutter-apk\app-debug.apk`.
+- Dependencias añadidas: **ninguna**. No se modificó pubspec ni su lockfile.
+- Rama: `feat/vision-client`. No se hizo commit ni push.
+
+## Inventario de archivos de la fase inicial
+
+11 archivos modificados, relativos a la raíz del proyecto:
+
+```text
+README.md
+lib/main.dart
+lib/app/app.dart
+lib/core/storage/settings_repository.dart
+lib/features/dashboard/presentation/dashboard_screen.dart
+lib/features/diagnostics/presentation/diagnostics_screen.dart
+lib/features/settings/controller/app_settings.dart
+lib/features/settings/controller/settings_controller.dart
+lib/features/settings/presentation/settings_screen.dart
+lib/features/vision/presentation/vision_screen.dart
+test/widget_test.dart
+```
+
+14 archivos nuevos:
+
+```text
+docs/vision-client.md
+lib/features/vision/controller/vision_controller.dart
+lib/features/vision/domain/vision_message.dart
+lib/features/vision/domain/vision_report.dart
+lib/features/vision/domain/vision_state.dart
+lib/features/vision/domain/vision_status.dart
+lib/features/vision/presentation/vision_widgets.dart
+lib/features/vision/services/remote_vision_service.dart
+lib/features/vision/services/vision_protocol_parser.dart
+test/features/vision/remote_vision_service_test.dart
+test/features/vision/support/vision_test_channel.dart
+test/features/vision/vision_controller_test.dart
+test/features/vision/vision_protocol_parser_test.dart
+test/features/vision/vision_settings_test.dart
+```
+
+Eliminado: `lib/features/vision/services/vision_service.dart`, que contenía las
+abstracciones antiguas de cámara/procesamiento local. `PositionEstimate`,
+`MachineController`, protocolo ESP32, discovery UDP y sus pruebas permanecen
+sin cambios.

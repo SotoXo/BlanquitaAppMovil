@@ -1,8 +1,7 @@
-import '../../settings/controller/app_settings.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../app/design/blanquita_design.dart';
+import '../../../app/theme/app_theme.dart';
 import '../../../core/models/machine_state.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../../../features/settings/controller/settings_controller.dart';
@@ -15,6 +14,7 @@ class HoldToMoveButton extends StatefulWidget {
     required this.label,
     required this.enabled,
     required this.active,
+    this.limitBlocked = false,
   });
 
   final MovementDirection movement;
@@ -22,6 +22,7 @@ class HoldToMoveButton extends StatefulWidget {
   final String label;
   final bool enabled;
   final bool active;
+  final bool limitBlocked;
 
   @override
   State<HoldToMoveButton> createState() => _HoldToMoveButtonState();
@@ -30,6 +31,8 @@ class HoldToMoveButton extends StatefulWidget {
 class _HoldToMoveButtonState extends State<HoldToMoveButton> {
   MachineController? _machine;
   int? _pointer;
+  int? _pressId;
+  MachineController? _pressMachine;
 
   @override
   void didChangeDependencies() {
@@ -38,42 +41,47 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
   }
 
   void _onDown(PointerDownEvent event) {
-    if (!widget.enabled || _pointer != null) return;
-    if (_machine?.startMovement(widget.movement) == true) {
+    if (!widget.enabled || widget.limitBlocked || _pointer != null) return;
+    final pressId = _machine?.beginMovement(widget.movement);
+    if (pressId != null) {
       _pointer = event.pointer;
+      _pressId = pressId;
+      _pressMachine = _machine;
     }
   }
 
   void _release(PointerEvent event) {
     if (_pointer != event.pointer) return;
     _pointer = null;
-    _machine?.stopMovement(widget.movement);
+    final pressId = _pressId;
+    _pressId = null;
+    if (pressId != null) _pressMachine?.releaseMovement(pressId);
+    _pressMachine = null;
   }
 
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsController>().settings;
-    final warm = settings.visualTheme != BlanquitaVisualTheme.original;
-    final duration =
-        settings.reduceMotion ||
-            settings.performanceMode ||
-            MediaQuery.disableAnimationsOf(context)
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final duration = settings.reduceMotion || settings.performanceMode
         ? Duration.zero
         : const Duration(milliseconds: 155);
-    final foreground = widget.active
-        ? BlanquitaColors.of(context).canvas
+    final foreground = widget.limitBlocked
+        ? AppColors.danger
+        : widget.active
+        ? const Color(0xFF031419)
         : widget.enabled
-        ? (warm
-              ? BlanquitaColors.of(context).cyan
-              : Theme.of(context).colorScheme.onSurface)
-        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5);
+        ? Theme.of(context).colorScheme.onSurface
+        : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.26);
 
     return Semantics(
       button: true,
-      enabled: widget.enabled,
-      label: widget.enabled
-          ? '${widget.label}. Mantener pulsado para mover.'
-          : '${widget.label}. Deshabilitado. Consulta el motivo del bloqueo.',
+      excludeSemantics: true,
+      enabled: widget.enabled && !widget.limitBlocked,
+      label: widget.limitBlocked
+          ? '${widget.label}. Bloqueada por final de carrera.'
+          : '${widget.label}. Mantener pulsado para mover.',
       child: Listener(
         behavior: HitTestBehavior.opaque,
         onPointerDown: _onDown,
@@ -86,55 +94,34 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
           child: AnimatedContainer(
             duration: duration,
             curve: Curves.easeOutCubic,
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+            constraints: const BoxConstraints(minWidth: 92, minHeight: 84),
             padding: const EdgeInsets.all(1.2),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(
-                warm ? BlanquitaRadius.control : 23,
+              borderRadius: BorderRadius.circular(23),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: widget.limitBlocked
+                    ? [
+                        AppColors.danger.withValues(alpha: 0.7),
+                        AppColors.danger.withValues(alpha: 0.15),
+                      ]
+                    : widget.active
+                    ? [AppColors.cyan, AppColors.cyanDeep]
+                    : [
+                        Colors.white.withValues(
+                          alpha: widget.enabled ? 0.15 : 0.055,
+                        ),
+                        AppColors.cyan.withValues(
+                          alpha: widget.enabled ? 0.07 : 0.02,
+                        ),
+                        Colors.white.withValues(alpha: 0.035),
+                      ],
               ),
-              color: warm
-                  ? (widget.active
-                        ? BlanquitaColors.of(context).cyan
-                        : BlanquitaColors.of(context).graphiteRaised)
-                  : null,
-              border: warm
-                  ? Border.all(
-                      color: widget.active
-                          ? BlanquitaColors.of(context).cyan
-                          : BlanquitaColors.of(
-                              context,
-                            ).cyanDeep.withValues(alpha: .4),
-                    )
-                  : null,
-              gradient: warm
-                  ? null
-                  : LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: widget.active
-                          ? [
-                              BlanquitaColors.of(context).cyan,
-                              BlanquitaColors.of(context).cyanDeep,
-                            ]
-                          : [
-                              Colors.white.withValues(
-                                alpha: widget.enabled ? 0.15 : 0.055,
-                              ),
-                              BlanquitaColors.of(context).cyan.withValues(
-                                alpha: widget.enabled ? 0.07 : 0.02,
-                              ),
-                              Colors.white.withValues(alpha: 0.035),
-                            ],
-                    ),
-              boxShadow:
-                  widget.active &&
-                      !settings.performanceMode &&
-                      settings.shadowsEnabled
+              boxShadow: widget.active && !settings.performanceMode
                   ? [
                       BoxShadow(
-                        color: BlanquitaColors.of(
-                          context,
-                        ).cyan.withValues(alpha: 0.25),
+                        color: AppColors.cyan.withValues(alpha: 0.25),
                         blurRadius: 22,
                         spreadRadius: -2,
                       ),
@@ -143,19 +130,18 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(
-                  warm ? BlanquitaRadius.control : 21.8,
-                ),
-                color: widget.active
-                    ? BlanquitaColors.of(context).cyan
+                borderRadius: BorderRadius.circular(21.8),
+                color: widget.limitBlocked
+                    ? AppColors.danger.withValues(alpha: 0.12)
+                    : widget.active
+                    ? AppColors.cyan
                     : widget.enabled
-                    ? BlanquitaColors.of(
-                        context,
-                      ).graphiteRaised.withValues(alpha: 0.92)
-                    : BlanquitaColors.of(
-                        context,
-                      ).graphite.withValues(alpha: 0.72),
-                gradient: widget.active || warm
+                    ? (isDark ? AppColors.graphiteRaised : scheme.surface)
+                          .withValues(alpha: 0.92)
+                    : (isDark ? AppColors.graphite : scheme.surface).withValues(
+                        alpha: 0.72,
+                      ),
+                gradient: widget.active || widget.limitBlocked
                     ? null
                     : LinearGradient(
                         begin: Alignment.topLeft,
@@ -164,14 +150,23 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
                           Colors.white.withValues(
                             alpha: widget.enabled ? 0.055 : 0.018,
                           ),
-                          BlanquitaColors.of(
-                            context,
-                          ).graphite.withValues(alpha: 0.90),
+                          (isDark ? AppColors.graphite : scheme.surface)
+                              .withValues(alpha: 0.90),
                         ],
                       ),
               ),
               child: Stack(
                 children: [
+                  if (widget.limitBlocked)
+                    const Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Icon(
+                        Icons.lock_rounded,
+                        size: 13,
+                        color: AppColors.danger,
+                      ),
+                    ),
                   Positioned(
                     top: 9,
                     right: 10,
@@ -188,18 +183,14 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          widget.enabled ? widget.icon : Icons.lock_outline,
-                          size: 26,
-                          color: foreground,
-                        ),
+                        Icon(widget.icon, size: 29, color: foreground),
                         const SizedBox(height: 5),
                         Text(
                           widget.label,
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: foreground,
-                            fontSize: 12,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.05,
                           ),
@@ -218,8 +209,8 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
 
   @override
   void dispose() {
-    if (_pointer != null) _machine?.stopMovementOnUnmount(widget.movement);
-    _pointer = null;
+    final pressId = _pressId;
+    if (pressId != null) _pressMachine?.releaseMovement(pressId);
     super.dispose();
   }
 }

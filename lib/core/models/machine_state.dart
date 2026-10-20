@@ -2,6 +2,86 @@ enum ConnectionPhase { disconnected, connecting, connected, error }
 
 enum MovementDirection { xLeft, xRight, zUp, zDown }
 
+enum LimitSwitchStatus {
+  unknown('Sin datos'),
+  free('Libre'),
+  active('Activado');
+
+  const LimitSwitchStatus(this.label);
+  final String label;
+}
+
+enum FinalLimit {
+  xIzquierda('X_IZQ', 'X izquierda', MovementDirection.xLeft),
+  xDerecha('X_DER', 'X derecha', MovementDirection.xRight),
+  zArriba('Z_ARRIBA', 'Z superior', MovementDirection.zUp),
+  zAbajo('Z_ABAJO', 'Z inferior', MovementDirection.zDown);
+
+  const FinalLimit(this.protocolName, this.label, this.direction);
+  final String protocolName;
+  final String label;
+  final MovementDirection direction;
+
+  String get retreatMessage => switch (this) {
+    FinalLimit.xIzquierda =>
+      'Límite izquierdo alcanzado. Suelta el botón y mueve el cartesiano hacia la derecha para retirarte.',
+    FinalLimit.xDerecha =>
+      'Límite derecho alcanzado. Suelta el botón y mueve el cartesiano hacia la izquierda para retirarte.',
+    FinalLimit.zArriba =>
+      'Límite superior alcanzado. Suelta el botón y baja el cartesiano para retirarte.',
+    FinalLimit.zAbajo =>
+      'Límite inferior alcanzado. Suelta el botón y sube el cartesiano para retirarte.',
+  };
+}
+
+/// Readings belong only to the current socket; unknown never permits motion.
+class FinalLimitsState {
+  const FinalLimitsState({
+    this.xIzquierda = LimitSwitchStatus.unknown,
+    this.xDerecha = LimitSwitchStatus.unknown,
+    this.zArriba = LimitSwitchStatus.unknown,
+    this.zAbajo = LimitSwitchStatus.unknown,
+  });
+
+  final LimitSwitchStatus xIzquierda;
+  final LimitSwitchStatus xDerecha;
+  final LimitSwitchStatus zArriba;
+  final LimitSwitchStatus zAbajo;
+
+  LimitSwitchStatus operator [](FinalLimit limit) => switch (limit) {
+    FinalLimit.xIzquierda => xIzquierda,
+    FinalLimit.xDerecha => xDerecha,
+    FinalLimit.zArriba => zArriba,
+    FinalLimit.zAbajo => zAbajo,
+  };
+
+  bool get isComplete => FinalLimit.values.every(
+    (limit) => this[limit] != LimitSwitchStatus.unknown,
+  );
+  bool get anyActive =>
+      FinalLimit.values.any((limit) => this[limit] == LimitSwitchStatus.active);
+  bool get xFault =>
+      xIzquierda == LimitSwitchStatus.active &&
+      xDerecha == LimitSwitchStatus.active;
+  bool get zFault =>
+      zArriba == LimitSwitchStatus.active && zAbajo == LimitSwitchStatus.active;
+  bool get hasFault => xFault || zFault;
+  bool axisFault(MovementDirection direction) =>
+      direction.axis == 'X' ? xFault : zFault;
+  bool blocks(MovementDirection direction) =>
+      axisFault(direction) ||
+      this[FinalLimit.values.firstWhere((l) => l.direction == direction)] ==
+          LimitSwitchStatus.active;
+
+  FinalLimitsState withReading(FinalLimit limit, LimitSwitchStatus value) =>
+      FinalLimitsState(
+        xIzquierda: limit == FinalLimit.xIzquierda ? value : xIzquierda,
+        xDerecha: limit == FinalLimit.xDerecha ? value : xDerecha,
+        zArriba: limit == FinalLimit.zArriba ? value : zArriba,
+        zAbajo: limit == FinalLimit.zAbajo ? value : zAbajo,
+      );
+}
+
 enum GripperState { unknown, opening, open, closing, closed }
 
 enum SequencePhase { idle, requested, running, completed, cancelled, error }
@@ -50,14 +130,15 @@ class MachineState {
     this.sequenceStep,
     this.sequenceStepLabel,
     this.plateDetected,
-    this.finalLimitActive,
+    bool? finalLimitActive,
+    this.finalLimits = const FinalLimitsState(),
     this.lastStatus = 'Sistema listo para conectar',
     this.lastMessage,
     this.lastCommand,
     this.lastReceivedAt,
     this.lastSensorPacket,
     this.connectionError,
-  });
+  }) : _legacyFinalLimitActive = finalLimitActive;
 
   final ConnectionPhase connection;
   final MovementDirection? activeMovement;
@@ -66,7 +147,14 @@ class MachineState {
   final int? sequenceStep;
   final String? sequenceStepLabel;
   final bool? plateDetected;
-  final bool? finalLimitActive;
+  final bool? _legacyFinalLimitActive;
+  final FinalLimitsState finalLimits;
+  // Compatibility summary for the dashboard and older sensor packets.
+  bool? get finalLimitActive => finalLimits.anyActive
+      ? true
+      : finalLimits.isComplete
+      ? false
+      : _legacyFinalLimitActive;
   final String lastStatus;
   final String? lastMessage;
   final String? lastCommand;
@@ -87,6 +175,7 @@ class MachineState {
     Object? sequenceStepLabel = _unset,
     Object? plateDetected = _unset,
     Object? finalLimitActive = _unset,
+    FinalLimitsState? finalLimits,
     String? lastStatus,
     Object? lastMessage = _unset,
     Object? lastCommand = _unset,
@@ -111,8 +200,9 @@ class MachineState {
           ? this.plateDetected
           : plateDetected as bool?,
       finalLimitActive: identical(finalLimitActive, _unset)
-          ? this.finalLimitActive
+          ? _legacyFinalLimitActive
           : finalLimitActive as bool?,
+      finalLimits: finalLimits ?? this.finalLimits,
       lastStatus: lastStatus ?? this.lastStatus,
       lastMessage: identical(lastMessage, _unset)
           ? this.lastMessage

@@ -1,12 +1,30 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/settings/controller/app_settings.dart';
+import '../../features/vision/domain/vision_endpoint.dart';
+import '../models/esp32_device.dart';
 
 class SettingsRepository {
   const SettingsRepository(this._preferences);
 
   final SharedPreferences _preferences;
+
+  Future<void> migrateVisionEndpoint() async {
+    final stored = _preferences.getString(_Keys.visionWebsocketUrl) ?? '';
+    if (stored.trim().isNotEmpty && VisionEndpoint.isValid(stored)) {
+      final normalized = VisionEndpoint.normalize(stored);
+      if (stored != normalized) {
+        await _preferences.setString(_Keys.visionWebsocketUrl, normalized);
+      }
+    }
+    final oldTimeout = _preferences.getInt(_Keys.visionHeartbeatTimeout);
+    if (oldTimeout != null && oldTimeout < 6000) {
+      await _preferences.setInt(_Keys.visionHeartbeatTimeout, 6000);
+    }
+  }
 
   AppSettings load() {
     return AppSettings(
@@ -39,6 +57,8 @@ class SettingsRepository {
       assistantAnimations:
           _preferences.getBool('ui.assistantAnimations') ?? true,
       websocketUrl: _preferences.getString(_Keys.websocketUrl) ?? '',
+      esp32LaboratoryMode: _preferences.getBool(_Keys.laboratoryMode) ?? false,
+      selectedEsp32: _loadDevice(),
       autoReconnect: _preferences.getBool(_Keys.autoReconnect) ?? true,
       hapticsEnabled: _preferences.getBool(_Keys.hapticsEnabled) ?? true,
       confirmSequence: _preferences.getBool(_Keys.confirmSequence) ?? true,
@@ -62,14 +82,13 @@ class SettingsRepository {
           _preferences.getBool(_Keys.connectionLossAlerts) ?? true,
       visualSensitivity:
           _preferences.getDouble(_Keys.visualSensitivity) ?? 0.65,
-      visionWebsocketUrl:
-          _preferences.getString(_Keys.visionWebsocketUrl) ?? '',
+      visionWebsocketUrl: _visionEndpoint(),
       visionAutoReconnect:
           _preferences.getBool(_Keys.visionAutoReconnect) ?? true,
       visionHeartbeatTimeout: Duration(
         milliseconds:
-            (_preferences.getInt(_Keys.visionHeartbeatTimeout) ?? 5000).clamp(
-              1000,
+            (_preferences.getInt(_Keys.visionHeartbeatTimeout) ?? 6000).clamp(
+              6000,
               60000,
             ),
       ),
@@ -101,6 +120,14 @@ class SettingsRepository {
       _preferences.setString('ui.font', settings.font.name),
       _preferences.setString('ui.visualTheme', settings.visualTheme.name),
       _preferences.setString(_Keys.websocketUrl, settings.websocketUrl),
+      _preferences.setBool(_Keys.laboratoryMode, settings.esp32LaboratoryMode),
+      if (settings.selectedEsp32 == null)
+        _preferences.remove(_Keys.selectedEsp32)
+      else
+        _preferences.setString(
+          _Keys.selectedEsp32,
+          jsonEncode(settings.selectedEsp32!.toJson()),
+        ),
       _preferences.setBool(_Keys.autoReconnect, settings.autoReconnect),
       _preferences.setBool(_Keys.hapticsEnabled, settings.hapticsEnabled),
       _preferences.setBool(_Keys.confirmSequence, settings.confirmSequence),
@@ -127,7 +154,7 @@ class SettingsRepository {
       ),
       _preferences.setString(
         _Keys.visionWebsocketUrl,
-        settings.visionWebsocketUrl,
+        _normalizeStoredVisionUrl(settings.visionWebsocketUrl),
       ),
       _preferences.setBool(
         _Keys.visionAutoReconnect,
@@ -144,6 +171,25 @@ class SettingsRepository {
     ]);
   }
 
+  Esp32Device? _loadDevice() {
+    try {
+      return Esp32Device.fromJson(
+        jsonDecode(_preferences.getString(_Keys.selectedEsp32) ?? 'null'),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
+  String _visionEndpoint() => _normalizeStoredVisionUrl(
+    _preferences.getString(_Keys.visionWebsocketUrl) ?? '',
+  );
+
+  String _normalizeStoredVisionUrl(String value) =>
+      value.trim().isEmpty || VisionEndpoint.isValid(value)
+      ? VisionEndpoint.normalize(value)
+      : value.trim(); // Keep invalid historic input editable, never open it.
+
   T _enumByName<T extends Enum>(List<T> values, String? name, T fallback) {
     if (name == null) return fallback;
     for (final value in values) {
@@ -154,6 +200,8 @@ class SettingsRepository {
 }
 
 abstract final class _Keys {
+  static const laboratoryMode = 'esp32.laboratory_mode';
+  static const selectedEsp32 = 'esp32.selected_device';
   static const websocketUrl = 'connection.websocket_url';
   static const autoReconnect = 'connection.auto_reconnect';
   static const hapticsEnabled = 'control.haptics';

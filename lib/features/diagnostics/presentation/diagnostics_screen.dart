@@ -194,7 +194,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                               'Detectado',
                               'Libre',
                             ),
-                            'Final de carrera': _boolLabel(
+                            'Resumen de finales': _boolLabel(
                               state.finalLimitActive,
                               'Activado',
                               'Libre',

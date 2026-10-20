@@ -10,6 +10,22 @@ enum VisionConnection {
   error,
 }
 
+enum VisionNetworkPhase {
+  disconnected('DISCONNECTED'),
+  discovered('DISCOVERED'),
+  connecting('CONNECTING'),
+  socketConnected('SOCKET_CONNECTED'),
+  waitingHello('WAITING_HELLO'),
+  waitingReady('WAITING_READY'),
+  waitingHeartbeat('WAITING_HEARTBEAT'),
+  ready('READY'),
+  reconnecting('RECONNECTING'),
+  error('ERROR');
+
+  const VisionNetworkPhase(this.label);
+  final String label;
+}
+
 class VisionState {
   const VisionState({
     this.connection = VisionConnection.disconnected,

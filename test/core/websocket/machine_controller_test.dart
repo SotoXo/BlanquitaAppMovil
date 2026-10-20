@@ -1,75 +1,40 @@
 import 'dart:async';
-
+import 'dart:convert';
+import 'package:blanquita/core/models/esp32_device.dart';
 import 'package:blanquita/core/models/machine_state.dart';
-
-import 'dart:io';
-
-import 'package:blanquita/core/diagnostics/connection_log.dart';
-import 'package:blanquita/features/vision/controller/vision_controller.dart';
-import 'package:blanquita/features/vision/services/remote_vision_service.dart';
-
-import '../../features/vision/support/vision_test_channel.dart';
-
+import 'package:blanquita/core/network/esp32_discovery_service.dart';
 import 'package:blanquita/core/storage/settings_repository.dart';
 import 'package:blanquita/core/websocket/machine_controller.dart';
 import 'package:blanquita/features/settings/controller/settings_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
+import '../../features/vision/support/vision_test_channel.dart';
+import '../../support/esp32_test_peer.dart';
 
-// These transport doubles exist only in tests; production always uses LAN/WS.
-class _Sink implements WebSocketSink {
-  final commands = <dynamic>[];
-  final _done = Completer<void>();
+Esp32Device device(String ip, [String id = testDeviceId]) => Esp32Device(
+  deviceId: id,
+  name: 'BLANQUITA',
+  deviceType: Esp32Device.cartesianType,
+  ip: ip,
+);
 
+class _Discovery extends Esp32DiscoveryService {
+  Future<List<Esp32Device>> Function() result = () async => [];
+  int calls = 0;
   @override
-  void add(dynamic data) => commands.add(data);
-
-  @override
-  Future<void> close([int? closeCode, String? closeReason]) async {
-    if (!_done.isCompleted) _done.complete();
+  Future<List<Esp32Device>> discoverDevices() {
+    calls++;
+    return result();
   }
 
   @override
-  Future<void> get done => _done.future;
-
+  void cancel() {}
   @override
-  void addError(Object error, [StackTrace? stackTrace]) => throw error;
-
-  @override
-  Future<void> addStream(Stream<dynamic> stream) async {
-    await for (final data in stream) {
-      add(data);
-    }
-  }
+  void dispose() {}
 }
 
-class _Channel implements WebSocketChannel {
-  final incoming = StreamController<dynamic>();
-  final transport = Completer<void>();
-  _Channel({bool open = true}) {
-    if (open) transport.complete();
-  }
-  @override
-  int? get closeCode => 1000;
-  @override
-  String? get closeReason => null;
-
-  @override
-  final _Sink sink = _Sink();
-
-  @override
-  Stream<dynamic> get stream => incoming.stream;
-
-  @override
-  Future<void> get ready => transport.future;
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
-}
-
-Future<void> _until(bool Function() condition) async {
-  final deadline = DateTime.now().add(const Duration(seconds: 4));
+Future<void> until(bool Function() condition) async {
+  final deadline = DateTime.now().add(const Duration(seconds: 5));
   while (!condition()) {
     if (DateTime.now().isAfter(deadline)) {
       fail('Timed out waiting for condition');
@@ -78,356 +43,461 @@ Future<void> _until(bool Function() condition) async {
   }
 }
 
-void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
-  late SharedPreferences preferences;
+class Harness {
   late SettingsController settings;
+  late SharedPreferences preferences;
   late MachineController machine;
-  late ConnectionLog log;
-  final channels = <_Channel>[];
+  final credentials = MemoryCredentials();
+  final discovery = _Discovery();
+  final channels = <TestVisionChannel>[];
   final urls = <Uri>[];
-
+  final failedHosts = <String>{};
+  Esp32TestPeer Function() peer = () => Esp32TestPeer(initialLimits: true);
   Future<void> setup({
-    String url = 'ws://192.168.43.27:81/',
-    Duration timeout = const Duration(milliseconds: 80),
-    WebSocketChannel Function(Uri)? factory,
+    String url = 'ws://10.2.3.44:81/',
+    bool lab = true,
+    bool v2 = false,
+    bool bound = true,
+    Duration? timeout,
   }) async {
     SharedPreferences.setMockInitialValues({
       'connection.websocket_url': url,
+      'esp32.laboratory_mode': lab,
       'connection.auto_reconnect': false,
       'control.haptics': false,
-      'vision.auto_reconnect': false,
-      'vision.websocket_url': 'ws://laptop.test:8765/',
+      if (v2) 'esp32.selected_device': jsonEncode(device('10.2.3.44').toJson()),
     });
     preferences = await SharedPreferences.getInstance();
     settings = SettingsController(SettingsRepository(preferences));
     await settings.load();
-    log = ConnectionLog();
+    if (v2 && bound) credentials.values[testDeviceId] = testSecret;
     machine = MachineController(
       settings,
-      connectionLog: log,
-      readyTimeout: timeout,
-      transportTimeout: timeout,
-      reconnectBaseDelay: const Duration(milliseconds: 20),
-      channelFactory:
-          factory ??
-          (uri) {
-            urls.add(uri);
-            final channel = _Channel();
-            channels.add(channel);
-            return channel;
-          },
-    );
-  }
-
-  Future<_Channel> online() async {
-    final connected = machine.connect();
-    await _until(() => channels.isNotEmpty);
-    final channel = channels.last;
-    channel.incoming.add('READY');
-    await connected;
-    return channel;
-  }
-
-  tearDown(() async {
-    machine.dispose();
-    settings.dispose();
-    for (final channel in channels) {
-      await channel.incoming.close();
-    }
-    channels.clear();
-    urls.clear();
-    log.dispose();
-  });
-
-  for (final url in [
-    '',
-    'http://robot:81/',
-    'ws://',
-    'ws://robot:99999/',
-    'ws://user:password@robot:81/',
-    'ws://robot:81/#secret',
-  ]) {
-    test('rejects invalid endpoint $url without opening transport', () async {
-      await setup(url: url);
-      await machine.connect();
-      expect(channels, isEmpty);
-      expect(machine.lastErrorCode, 'INVALID_ENDPOINT');
-      expect(machine.canStartMovement, false);
-    });
-  }
-
-  test('open transport alone never enables physical commands', () async {
-    await setup();
-    final connected = machine.connect();
-    await _until(() => machine.transportOpen);
-    expect(machine.phase, 'waiting_ready');
-    expect(machine.state.isConnected, false);
-    expect(machine.startMovement(MovementDirection.xLeft), false);
-    machine.openGripper();
-    machine.startSequence();
-    machine.stopNow();
-    machine.emergencyStop();
-    expect(channels.single.sink.commands, isEmpty);
-    channels.single.incoming.add('SENSOR:ESTADO:P=1,F=0');
-    await Future<void>.delayed(Duration.zero);
-    expect(machine.state.isConnected, false);
-    channels.single.incoming.add('READY');
-    await connected;
-    expect(machine.state.isConnected, true);
-    expect(machine.phase, 'connected');
-    expect(machine.state.plateDetected, true);
-    expect(log.entries.any((e) => e.phase == 'websocket_open'), true);
-    expect(log.entries.any((e) => e.phase == 'waiting_ready'), true);
-  });
-
-  test(
-    'READY timeout preserves configured endpoint and explains protocol failure',
-    () async {
-      await setup();
-      await machine.connect();
-      expect(machine.lastErrorCode, 'READY_TIMEOUT');
-      expect(machine.lastTechnicalError, contains('transport=open'));
-      expect(machine.state.connection, ConnectionPhase.error);
-      expect(settings.settings.websocketUrl, 'ws://192.168.43.27:81/');
-      expect(channels.single.sink.commands, isEmpty);
-    },
-  );
-
-  test('transport timeout is different from missing READY', () async {
-    await setup(
-      factory: (_) {
-        final channel = _Channel(open: false);
+      discoveryService: discovery,
+      credentialStore: credentials,
+      readyTimeout: timeout ?? const Duration(milliseconds: 200),
+      channelFactory: (uri) {
+        urls.add(uri);
+        final channel = v2 ? peer() : TestVisionChannel();
         channels.add(channel);
+        if (failedHosts.contains(uri.host)) {
+          scheduleMicrotask(
+            () => channel.incoming.addError(StateError('old IP')),
+          );
+        }
         return channel;
       },
     );
-    await machine.connect();
-    expect(machine.lastErrorCode, 'CONNECT_TIMEOUT');
-    expect(machine.transportOpen, false);
-    expect(log.entries.any((e) => e.phase == 'waiting_ready'), false);
-  });
+    addTearDown(() async {
+      machine.dispose();
+      settings.dispose();
+      for (final channel in channels) {
+        await channel.incoming.close();
+      }
+    });
+  }
 
+  Future<void> connectLegacy({bool withLimits = true}) async {
+    final connecting = machine.connect();
+    await until(() => channels.isNotEmpty);
+    channels.last.incoming.add('READY');
+    await connecting;
+    if (withLimits) {
+      for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+        channels.last.incoming.add('SENSOR:FC:$name:0');
+      }
+    }
+  }
+}
+
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   test(
-    'early READY never bypasses pending transport and manual cancellation',
+    'V2 transports individual limits and STOP-release with signed commands',
     () async {
-      await setup(
-        factory: (_) {
-          final channel = _Channel(open: false);
-          channels.add(channel);
-          return channel;
+      final h = Harness();
+      await h.setup(v2: true);
+      h.peer = () => Esp32TestPeer();
+      await h.machine.connect();
+      final p = h.channels.single as Esp32TestPeer;
+      expect(h.machine.canStartMovement, false);
+      for (final name in ['X_IZQ', 'X_DER', 'Z_ARRIBA', 'Z_ABAJO']) {
+        p.event('SENSOR:FC:$name:0');
+      }
+      final press = h.machine.beginMovement(MovementDirection.xLeft)!;
+      p.event('STOP');
+      p.event('LIMITE:FINAL_X_IZQUIERDA');
+      p.event('SENSOR:FC:X_IZQ:1');
+      h.machine.releaseMovement(press);
+      expect(p.commands, ['a', 'x']);
+      expect(h.machine.canMove(MovementDirection.xLeft), false);
+      expect(h.machine.canMove(MovementDirection.xRight), true);
+      final retreat = h.machine.beginMovement(MovementDirection.xRight)!;
+      h.machine.releaseMovement(retreat);
+      expect(p.commands, ['a', 'x', 'd', 'x']);
+      expect(h.machine.isAuthorized, true);
+    },
+  );
+  test('manual disconnect cancels pairing before a socket can open', () async {
+    final h = Harness();
+    await h.setup(v2: true, bound: false);
+    final pairing = h.machine.pairSelected(testSecret);
+    await h.machine.disconnect();
+    expect(await pairing, false);
+    expect(h.channels, isEmpty);
+    expect(h.credentials.values, isEmpty);
+  });
+  test(
+    'pairing blocks movement until secure persistence and cancellation removes pending key',
+    () async {
+      final h = Harness();
+      await h.setup(v2: true, bound: false);
+      h.credentials.writeBarrier = Completer<void>();
+      final pairing = h.machine.pairSelected(testSecret);
+      await until(() => h.machine.isAuthorized);
+      expect(h.machine.canStartMovement, false);
+      expect(h.machine.startMovement(MovementDirection.xLeft), false);
+      await h.machine.disconnect();
+      h.credentials.writeBarrier!.complete();
+      expect(await pairing, false);
+      expect(h.credentials.values, isEmpty);
+      expect(h.machine.hasValidConnection, false);
+    },
+  );
+  test('laboratory is off initially; saved URL cannot authorize', () async {
+    final h = Harness();
+    await h.setup(lab: false);
+    await h.machine.connect();
+    expect(h.channels, isEmpty);
+    expect(h.machine.canStartMovement, false);
+  });
+  test(
+    'manual old firmware requires READY and stays unauthenticated without UDP',
+    () async {
+      final h = Harness();
+      await h.setup(url: 'ws://172.20.10.7:81/');
+      final connecting = h.machine.connect();
+      expect(h.machine.startMovement(MovementDirection.xLeft), false);
+      h.machine.openGripper();
+      h.machine.closeGripper();
+      h.machine.startSequence();
+      h.machine.stopNow();
+      h.machine.emergencyStop();
+      h.machine.requestFaster();
+      expect(h.channels.single.sink.sent, isEmpty);
+      h.channels.single.incoming.add('ACK');
+      expect(h.machine.state.isConnected, false);
+      h.channels.single.incoming.add('READY');
+      await connecting;
+      expect(h.machine.hasValidConnection, true);
+      expect(h.machine.isAuthorized, false);
+      expect(h.machine.authenticationLabel, contains('sin autenticación'));
+      expect(h.discovery.calls, 0);
+      expect(h.machine.deviceAddress, '172.20.10.7');
+    },
+  );
+  test(
+    'same-IP auto reconnect needs fresh READY and never resumes movement',
+    () async {
+      final h = Harness();
+      await h.setup();
+      await h.settings.setAutoReconnect(true);
+      await h.connectLegacy();
+      h.machine.startMovement(MovementDirection.xLeft);
+      h.channels.first.incoming.addError(StateError('lost'));
+      expect(h.channels.first.sink.sent, ['a', 'x']);
+      expect(h.machine.state.activeMovement, isNull);
+      expect(h.machine.canStartMovement, false);
+      await until(() => h.channels.length == 2);
+      expect(h.urls[1], h.urls[0]);
+      expect(h.machine.hasValidConnection, false);
+      h.channels.last.incoming.add('READY');
+      await until(() => h.machine.hasValidConnection);
+      expect(h.channels.last.sink.sent, isEmpty);
+    },
+  );
+  test(
+    'heartbeat 200ms, STOP, pinza, speed, sequence and emergency preserve bytes',
+    () async {
+      final h = Harness();
+      await h.setup();
+      await h.connectLegacy();
+      h.machine.startMovement(MovementDirection.zUp);
+      await Future<void>.delayed(const Duration(milliseconds: 225));
+      expect(h.channels.single.sink.sent, ['w', 'k']);
+      expect(
+        MachineController.heartbeatInterval,
+        const Duration(milliseconds: 200),
+      );
+      h.machine.stopMovement();
+      h.machine.openGripper();
+      h.machine.closeGripper();
+      h.machine.requestFaster();
+      h.machine.requestSlower();
+      h.machine.startSequence();
+      h.machine.emergencyStop();
+      expect(h.channels.single.sink.sent, [
+        'w',
+        'k',
+        'x',
+        'q',
+        'e',
+        '+',
+        '-',
+        'j',
+        'z',
+      ]);
+    },
+  );
+  test(
+    'legacy sensor snapshot stays observable but cannot replace the four limits',
+    () async {
+      final h = Harness();
+      await h.setup();
+      await h.connectLegacy(withLimits: false);
+      h.channels.single.incoming.add('SENSOR:ESTADO:P=1,F=0');
+      expect(h.machine.state.plateDetected, true);
+      expect(h.machine.startMovement(MovementDirection.xRight), false);
+      h.channels.single.incoming.add('SENSOR:FINAL:1');
+      expect(h.machine.state.finalLimitActive, true);
+      expect(h.machine.state.activeMovement, isNull);
+      expect(h.machine.canStartSequence, false);
+      expect(h.machine.canStartMovement, false);
+    },
+  );
+  test(
+    'handshake timeout rejects READY absence without replacing URL',
+    () async {
+      final h = Harness();
+      await h.setup(timeout: const Duration(milliseconds: 20));
+      await h.machine.connect();
+      expect(h.machine.state.connection, ConnectionPhase.error);
+      expect(h.machine.lastError, contains('Timeout'));
+      expect(h.settings.settings.websocketUrl, 'ws://10.2.3.44:81/');
+      expect(h.machine.canStartMovement, false);
+    },
+  );
+  test(
+    'legacy IP failure never controls unbound discovery candidates',
+    () async {
+      final h = Harness();
+      await h.setup();
+      h.failedHosts.add('10.2.3.44');
+      h.discovery.result = () async => [device('10.2.3.99', 'other')];
+      await h.machine.connect();
+      expect(h.urls, hasLength(1));
+      expect(h.machine.devices, hasLength(1));
+      expect(h.settings.settings.websocketUrl, 'ws://10.2.3.44:81/');
+      expect(h.machine.hasValidConnection, false);
+    },
+  );
+  test(
+    'discovery lists all candidates and requires explicit selection and binding',
+    () async {
+      final h = Harness();
+      await h.setup(url: '', lab: false);
+      h.discovery.result = () async => [
+        device('10.1.1.2'),
+        device('10.1.1.3', 'other'),
+      ];
+      await h.machine.searchEsp32();
+      expect(h.machine.devices, hasLength(2));
+      expect(h.channels, isEmpty);
+      expect(h.machine.selectedDevice, isNull);
+      expect(h.machine.linkPhase, Esp32LinkPhase.found);
+      await h.machine.selectDevice(h.machine.devices.first);
+      await h.machine.connect();
+      expect(h.machine.selectedDevice!.deviceId, testDeviceId);
+      expect(h.machine.laboratoryEnabled, false);
+      expect(h.channels, isEmpty);
+      expect(h.machine.hasValidConnection, false);
+    },
+  );
+  test(
+    'pair verifies before persisting secret separately and unpair removes it',
+    () async {
+      final h = Harness();
+      await h.setup(v2: true, bound: false);
+      final phases = <Esp32LinkPhase>[];
+      h.machine.addListener(() => phases.add(h.machine.linkPhase));
+      expect(await h.machine.pairSelected(testSecret), true);
+      expect(h.machine.isAuthorized, true);
+      expect(
+        phases,
+        containsAllInOrder([
+          Esp32LinkPhase.identityVerified,
+          Esp32LinkPhase.authenticating,
+          Esp32LinkPhase.authorized,
+        ]),
+      );
+      expect(h.credentials.values[testDeviceId], testSecret);
+      expect(
+        SettingsRepository(h.preferences).load().selectedEsp32!.deviceId,
+        testDeviceId,
+      );
+      expect(
+        h.preferences.getKeys().map((k) => h.preferences.get(k)).toString(),
+        isNot(contains(testSecret)),
+      );
+      h.machine.startMovement(MovementDirection.xLeft);
+      h.machine.stopNow();
+      expect((h.channels.single as Esp32TestPeer).commands, ['a', 'x']);
+      await h.machine.unpair();
+      expect(h.credentials.values, isEmpty);
+      expect(SettingsRepository(h.preferences).load().selectedEsp32, isNull);
+    },
+  );
+  test(
+    'secure storage failure cannot enable controls or report binding success',
+    () async {
+      final h = Harness();
+      await h.setup(v2: true, bound: false);
+      h.credentials.failWrites = true;
+      expect(await h.machine.pairSelected(testSecret), false);
+      expect(h.machine.hasValidConnection, false);
+      expect(h.credentials.values, isEmpty);
+    },
+  );
+  test(
+    'persisted identity and credential authorize a recreated controller',
+    () async {
+      final h = Harness();
+      await h.setup(v2: true);
+      h.machine.dispose();
+      h.machine = MachineController(
+        h.settings,
+        discoveryService: h.discovery,
+        credentialStore: h.credentials,
+        channelFactory: (_) {
+          final p = Esp32TestPeer();
+          h.channels.add(p);
+          return p;
         },
       );
-      final pending = machine.connect();
-      channels.single.incoming.add('READY');
-      await Future<void>.delayed(Duration.zero);
-      expect(machine.state.isConnected, false);
-      await machine.disconnect();
-      channels.single.transport.complete();
-      await pending;
-      await Future<void>.delayed(Duration.zero);
-      expect(machine.state.isConnected, false);
+      await h.machine.connect();
+      expect(h.machine.isAuthorized, true);
+      expect(h.machine.selectedDevice!.deviceId, testDeviceId);
     },
   );
-
-  test('connection refused classifies original transport error', () async {
-    await setup(
-      factory: (_) => throw const SocketException(
-        'Connection refused',
-        osError: OSError('Connection refused', 111),
-      ),
+  test(
+    'DHCP recovery chooses only bound ID among multiple ESP32 and updates address after proof',
+    () async {
+      final h = Harness();
+      await h.setup(v2: true);
+      h.failedHosts.add('10.2.3.44');
+      h.discovery.result = () async => [
+        device('172.20.10.8', 'foreign'),
+        device('172.20.10.9'),
+      ];
+      await h.machine.connect();
+      expect(h.urls.map((u) => u.host), ['10.2.3.44', '172.20.10.9']);
+      expect(h.machine.isAuthorized, true);
+      expect(h.settings.settings.websocketUrl, 'ws://172.20.10.9:81/');
+      expect(h.settings.settings.selectedEsp32!.ip, '172.20.10.9');
+    },
+  );
+  test(
+    'duplicate IDs at different addresses never choose the first responder',
+    () async {
+      final h = Harness();
+      await h.setup(v2: true, url: '');
+      h.discovery.result = () async => [device('10.1.1.2'), device('10.1.1.3')];
+      await h.machine.connect();
+      expect(h.channels, isEmpty);
+      expect(h.machine.lastError, contains('duplicado'));
+    },
+  );
+  for (final variant in [
+    'wrong identity',
+    'wrong key',
+    'forged proof',
+    'busy client',
+    'old READY',
+    'timeout',
+  ]) {
+    test(
+      'V2 rejects $variant without physical commands or legacy downgrade',
+      () async {
+        final h = Harness();
+        await h.setup(v2: true, timeout: const Duration(milliseconds: 25));
+        h.peer = () => Esp32TestPeer(
+          deviceId: variant == 'wrong identity' ? 'other' : testDeviceId,
+          secret: variant == 'wrong key' ? 'f' * 64 : testSecret,
+          badProof: variant == 'forged proof',
+          busy: variant == 'busy client',
+          reply: variant != 'old READY' && variant != 'timeout',
+        );
+        final connecting = h.machine.connect();
+        await until(() => h.channels.isNotEmpty);
+        if (variant == 'old READY') h.channels.single.incoming.add('READY');
+        await connecting;
+        expect(h.machine.isAuthorized, false);
+        expect(h.machine.canStartMovement, false);
+        expect((h.channels.single as Esp32TestPeer).commands, isEmpty);
+        expect(h.machine.laboratoryEnabled, false);
+      },
     );
-    await machine.connect();
-    expect(machine.lastErrorCode, 'CONNECTION_REFUSED');
-    expect(machine.lastTechnicalError, contains('SocketException'));
-    expect(machine.state.connectionError, isNot(contains('SocketException')));
-  });
-
+  }
   test(
-    'remote close stops movement, invalidates sensors and blocks control',
+    'signed sensors work; replay invalidates session and attempts signed STOP',
     () async {
-      await setup();
-      final channel = await online();
-      machine.startMovement(MovementDirection.xLeft);
-      await channel.incoming.close();
-      expect(machine.lastErrorCode, 'REMOTE_CLOSED');
-      expect(machine.state.activeMovement, isNull);
-      expect(machine.canStartMovement, false);
-      expect(machine.transportOpen, false);
+      final h = Harness();
+      await h.setup(v2: true);
+      await h.machine.connect();
+      final p = h.channels.single as Esp32TestPeer;
+      p.event('SENSOR:ESTADO:P=1,F=0');
+      expect(h.machine.state.plateDetected, true);
+      h.machine.startMovement(MovementDirection.xLeft);
+      p.event('SENSOR:PLATO:0');
+      expect(h.machine.state.plateDetected, false);
+      p.incoming.add(p.eventFrame('SENSOR:PLATO:0', seq: 2));
+      expect(h.machine.isAuthorized, false);
+      expect(p.commands, ['a', 'x']);
     },
   );
-
   test(
-    'manual disconnect cancels pending validation and ignores late READY',
+    'cancel discovery ignores late candidate and never persists its address',
     () async {
-      await setup();
-      final connecting = machine.connect();
-      await _until(() => machine.transportOpen);
-      await machine.disconnect();
-      channels.single.incoming.add('READY');
+      final h = Harness();
+      await h.setup(v2: true, url: '');
+      final reply = Completer<List<Esp32Device>>();
+      h.discovery.result = () => reply.future;
+      final connecting = h.machine.connect();
+      await until(() => h.machine.isDiscovering);
+      h.machine.cancelSearch();
+      reply.complete([device('192.168.8.22')]);
       await connecting;
-      await Future<void>.delayed(Duration.zero);
-      expect(machine.state.connection, ConnectionPhase.disconnected);
-      expect(machine.canStartMovement, false);
+      expect(h.channels, isEmpty);
+      expect(h.machine.isDiscovering, false);
+      expect(h.machine.state.connection, ConnectionPhase.disconnected);
+      expect(h.settings.settings.websocketUrl, isEmpty);
     },
   );
-
   test(
-    'reconnect repeats saved endpoint and only succeeds with new READY',
+    'hotspot to router retains ID, stops movement and reauthorizes on each LAN',
     () async {
-      await setup();
-      final old = await online();
-      machine.startMovement(MovementDirection.xLeft);
-      final retry = machine.reconnect();
-      await _until(() => channels.length == 2);
-      expect(old.sink.commands, ['a', 'x']);
-      old.incoming.add('READY');
-      expect(machine.state.isConnected, false);
-      channels.last.incoming.add('READY');
-      await retry;
-      expect(machine.state.isConnected, true);
-      expect(
-        urls.map((uri) => uri.toString()),
-        everyElement(settings.settings.websocketUrl),
-      );
+      final h = Harness();
+      await h.setup(v2: true);
+      await h.settings.setAutoReconnect(true);
+      await h.machine.connect();
+      for (final ip in ['172.20.10.8', '192.168.50.63', '10.42.2.19']) {
+        final previous = h.channels.last as Esp32TestPeer;
+        h.machine.startMovement(MovementDirection.zDown);
+        h.machine.handleAppInactive();
+        expect(previous.commands, ['s', 'x']);
+        h.machine.stopMovement(); // Physical release after the app suspended.
+        expect(h.machine.canStartMovement, false);
+        h.failedHosts.add(Uri.parse(h.settings.settings.websocketUrl).host);
+        h.discovery.result = () async => [
+          device(ip),
+          device('10.0.0.99', 'foreign'),
+        ];
+        h.machine.handleAppResumed();
+        await until(() => h.settings.settings.selectedEsp32!.ip == ip);
+        expect(h.machine.isAuthorized, true);
+        expect(h.machine.state.activeMovement, isNull);
+        expect(h.machine.selectedDevice!.deviceId, testDeviceId);
+      }
     },
   );
-
-  test(
-    'URL changed persists and restarts control only; old session ignored',
-    () async {
-      await setup();
-      final old = await online();
-      await settings.setWebsocketUrl('ws://192.168.43.99:81/');
-      await _until(() => channels.length == 2);
-      old.incoming.add('READY');
-      await Future<void>.delayed(Duration.zero);
-      expect(machine.state.isConnected, false);
-      expect(urls.last.host, '192.168.43.99');
-      expect(
-        SettingsRepository(preferences).load().websocketUrl,
-        settings.settings.websocketUrl,
-      );
-      expect(settings.settings.visionWebsocketUrl, 'ws://laptop.test:8765/');
-      channels.last.incoming.add('READY');
-      await _until(() => machine.state.isConnected);
-    },
-  );
-
-  test(
-    'control endpoint edited in background connects on resume even with automatic retries off',
-    () async {
-      await setup();
-      await online();
-      machine.handleAppInactive();
-      await settings.setWebsocketUrl('ws://192.168.43.99:81/');
-      await Future<void>.delayed(Duration.zero);
-      expect(channels.length, 1);
-      machine.handleAppResumed();
-      await _until(() => channels.length == 2);
-      expect(urls.last.host, '192.168.43.99');
-      channels.last.incoming.add('READY');
-      await _until(() => machine.state.isConnected);
-    },
-  );
-
-  test('automatic reconnect is cancelled by manual disconnect', () async {
-    await setup();
-    await settings.setAutoReconnect(true);
-    final first = await online();
-    first.incoming.addError(StateError('lost'));
-    await _until(() => machine.reconnectAttempts == 1);
-    await machine.disconnect();
-    await Future<void>.delayed(const Duration(milliseconds: 40));
-    expect(channels.length, 1);
-    expect(machine.reconnectAttempts, 0);
-  });
-
-  test('automatic reconnect validates same saved URL again', () async {
-    await setup();
-    await settings.setAutoReconnect(true);
-    final first = await online();
-    first.incoming.addError(StateError('lost'));
-    await _until(() => channels.length == 2);
-    expect(urls.last, urls.first);
-    expect(machine.state.isConnected, false);
-    channels.last.incoming.add('READY');
-    await _until(() => machine.state.isConnected);
-    expect(machine.reconnectAttempts, 0);
-  });
-
-  test(
-    'probe sends no physical commands and reuses validated connection',
-    () async {
-      await setup();
-      final probing = machine.testConnection();
-      await _until(() => machine.transportOpen);
-      expect(machine.startMovement(MovementDirection.zUp), false);
-      channels.single.incoming.add('READY');
-      expect(await probing, true);
-      expect(await machine.testConnection(), true);
-      expect(channels.length, 1);
-      expect(channels.single.sink.commands, isEmpty);
-    },
-  );
-
-  test(
-    'movement heartbeat, lifecycle STOP, resume and final limit stay enforced',
-    () async {
-      await setup();
-      final channel = await online();
-      expect(machine.startMovement(MovementDirection.xLeft), true);
-      await Future<void>.delayed(const Duration(milliseconds: 225));
-      expect(channel.sink.commands, ['a', 'k']);
-      machine.handleAppInactive();
-      expect(channel.sink.commands.last, 'x');
-      expect(machine.startMovement(MovementDirection.zUp), false);
-      await Future<void>.delayed(const Duration(milliseconds: 225));
-      expect(channel.sink.commands, ['a', 'k', 'x']);
-      machine.handleAppResumed();
-      expect(machine.startMovement(MovementDirection.zUp), true);
-      channel.incoming.add('SENSOR:FINAL:1');
-      await Future<void>.delayed(Duration.zero);
-      expect(machine.state.activeMovement, isNull);
-      expect(machine.canStartSequence, false);
-      machine.emergencyStop();
-      expect(channel.sink.commands.last, 'z');
-    },
-  );
-
-  test('vision failure leaves manual control and STOP available', () async {
-    await setup();
-    await online();
-    final vision = VisionController(
-      settings,
-      service: RemoteVisionService(
-        channelFactory: (_) => throw StateError('vision lost'),
-      ),
-    );
-    await vision.connect();
-    expect(machine.state.isConnected, true);
-    expect(machine.startMovement(MovementDirection.xRight), true);
-    machine.stopNow();
-    expect(channels.single.sink.commands.last, 'x');
-    vision.dispose();
-  });
-
-  test('control failure leaves validated vision session available', () async {
-    await setup();
-    final control = await online();
-    final visionChannel = TestVisionChannel();
-    final vision = VisionController(
-      settings,
-      service: RemoteVisionService(channelFactory: (_) => visionChannel),
-    );
-    await vision.connect();
-    visionChannel.receive('vision.ready', DateTime.now());
-    await _until(() => vision.state.ready);
-    control.incoming.addError(StateError('control lost'));
-    await _until(() => !machine.state.isConnected);
-    expect(vision.state.ready, true);
-    expect(vision.transportOpen, true);
-    vision.dispose();
-    await visionChannel.incoming.close();
-  });
 }

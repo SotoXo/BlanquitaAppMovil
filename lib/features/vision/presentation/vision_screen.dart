@@ -103,6 +103,12 @@ class VisionScreen extends StatelessWidget {
                             GlassButton(
                               onPressed: controller.isConnecting
                                   ? null
+                                  : controller.searchVision,
+                              child: const Text('Buscar visor'),
+                            ),
+                            GlassButton(
+                              onPressed: controller.isConnecting
+                                  ? null
                                   : state.isConnected
                                   ? controller.reconnect
                                   : controller.connect,

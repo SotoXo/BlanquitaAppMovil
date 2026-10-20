@@ -15,6 +15,7 @@ import '../../../core/models/machine_state.dart';
 import '../../../core/websocket/machine_controller.dart';
 import '../../../features/settings/controller/settings_controller.dart';
 import '../../../shared/widgets/glass_surface.dart';
+import '../../../shared/widgets/final_limits_panel.dart';
 import '../../../shared/widgets/motion_reveal.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/status_widgets.dart';
@@ -257,6 +258,15 @@ class _ControlConsole extends StatelessWidget {
           ],
           const SizedBox(height: 14),
           _ControlPad(machine: machine),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(height: 1),
+          ),
+          FinalLimitsPanel(
+            limits: state.finalLimits,
+            awaitingRelease:
+                machine.awaitingMovementRelease && state.activeMovement == null,
+          ),
         ],
       ),
     );

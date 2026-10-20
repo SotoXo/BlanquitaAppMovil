@@ -12,6 +12,7 @@ import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/wifi_network_panel.dart';
 import '../controller/app_settings.dart';
 import '../controller/settings_controller.dart';
+import 'esp32_identity_panel.dart';
 import '../../vision/controller/vision_controller.dart';
 import '../../vision/presentation/vision_widgets.dart';
 import 'endpoint_dialog.dart';
@@ -76,6 +77,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     autoReconnect: settings.autoReconnect,
                     onEdit: () => _editWebsocket(context, controller),
                   ),
+                ),
+                const SizedBox(height: 18),
+                _VisionConnectionPanel(
+                  vision: vision,
+                  onEdit: () => _editVisionUrl(context, controller),
+                ),
+                const SizedBox(height: 10),
+                GlassButton(
+                  expanded: true,
+                  onPressed: machine.isConnecting && vision.isConnecting
+                      ? null
+                      : () {
+                          if (!machine.isConnecting) {
+                            unawaited(machine.searchEsp32());
+                          }
+                          if (!vision.isConnecting) {
+                            unawaited(vision.searchVision());
+                          }
+                        },
+                  child: const Text('Buscar dispositivos'),
                 ),
                 const SizedBox(height: 18),
                 Text(
@@ -247,8 +268,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       options: {
                         settings.visionHeartbeatTimeout:
                             '${settings.visionHeartbeatTimeout.inMilliseconds / 1000} s',
-                        const Duration(seconds: 2): '2 s',
-                        const Duration(seconds: 5): '5 s',
+                        const Duration(seconds: 6): '6 s',
                         const Duration(seconds: 10): '10 s',
                         const Duration(seconds: 30): '30 s',
                       },
@@ -455,7 +475,7 @@ class _ConnectionPanel extends StatelessWidget {
             phase: machine.phase,
           ),
           Text(
-            'Red esperada: ${MachineController.wifiName}',
+            'Red local: hotspot o router · sin depender del SSID',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 6),
@@ -558,6 +578,8 @@ class _ConnectionPanel extends StatelessWidget {
               ).colorScheme.onSurface.withValues(alpha: 0.72),
             ),
           ),
+          const SizedBox(height: 12),
+          const Esp32IdentityPanel(),
         ],
       ),
     );

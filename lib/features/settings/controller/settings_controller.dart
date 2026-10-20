@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/storage/settings_repository.dart';
 import '../../../core/diagnostics/connection_log.dart';
+import '../../../core/models/esp32_device.dart';
+import '../../vision/domain/vision_endpoint.dart';
 import 'app_settings.dart';
 
 class SettingsController extends ChangeNotifier {
@@ -15,6 +17,7 @@ class SettingsController extends ChangeNotifier {
   AppSettings get settings => _settings;
 
   Future<void> load() async {
+    await _repository.migrateVisionEndpoint();
     _settings = _repository.load();
     notifyListeners();
   }
@@ -67,6 +70,17 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> setWebsocketUrl(String value) =>
       _update(_settings.copyWith(websocketUrl: value.trim()));
+  Future<void> setEsp32LaboratoryMode(bool value) => _update(
+    _settings.copyWith(
+      esp32LaboratoryMode:
+          value &&
+          !AppSettings.multiDeviceDeployment &&
+          _settings.selectedEsp32 == null,
+    ),
+  );
+  Future<void> selectEsp32(Esp32Device? device) => _update(
+    _settings.copyWith(selectedEsp32: device, esp32LaboratoryMode: false),
+  );
   Future<void> setAutoReconnect(bool value) =>
       _update(_settings.copyWith(autoReconnect: value));
   Future<void> setHapticsEnabled(bool value) =>
@@ -91,14 +105,15 @@ class SettingsController extends ChangeNotifier {
       _update(_settings.copyWith(connectionLossAlerts: value));
   Future<void> setVisualSensitivity(double value) =>
       _update(_settings.copyWith(visualSensitivity: value));
-  Future<void> setVisionWebsocketUrl(String value) =>
-      _update(_settings.copyWith(visionWebsocketUrl: value.trim()));
+  Future<void> setVisionWebsocketUrl(String value) => _update(
+    _settings.copyWith(visionWebsocketUrl: VisionEndpoint.normalize(value)),
+  );
   Future<void> setVisionAutoReconnect(bool value) =>
       _update(_settings.copyWith(visionAutoReconnect: value));
   Future<void> setVisionHeartbeatTimeout(Duration value) => _update(
     _settings.copyWith(
       visionHeartbeatTimeout: Duration(
-        milliseconds: value.inMilliseconds.clamp(1000, 60000),
+        milliseconds: value.inMilliseconds.clamp(6000, 60000),
       ),
     ),
   );

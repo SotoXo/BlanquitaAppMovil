@@ -1,8 +1,59 @@
 import 'package:blanquita/core/protocol/esp32_protocol.dart';
+import 'package:blanquita/core/models/machine_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   const parser = Esp32MessageParser();
+
+  for (final limit in FinalLimit.values) {
+    for (final active in [false, true]) {
+      test('strict directional sensor ${limit.protocolName}=$active', () {
+        final message = parser.parse(
+          'SENSOR:FC:${limit.protocolName}:${active ? 1 : 0}',
+        );
+        expect(message.type, Esp32MessageType.directionalLimitSensor);
+        expect(message.finalLimit, limit);
+        expect(message.booleanValue, active);
+      });
+    }
+  }
+
+  test('all four LIMITE events identify logical directions', () {
+    final packets = {
+      'LIMITE:FINAL_X_IZQUIERDA': FinalLimit.xIzquierda,
+      'LIMITE:FINAL_X_DERECHA': FinalLimit.xDerecha,
+      'LIMITE:FINAL_Z_ARRIBA': FinalLimit.zArriba,
+      'LIMITE:FINAL_Z_ABAJO': FinalLimit.zAbajo,
+    };
+    for (final entry in packets.entries) {
+      final message = parser.parse(entry.key);
+      expect(message.type, Esp32MessageType.directionalLimitReached);
+      expect(message.finalLimit, entry.value);
+      expect(message.booleanValue, true);
+    }
+  });
+
+  test('rejects malformed names, values, suffixes and GPIO identifiers', () {
+    for (final packet in [
+      'SENSOR:FC:X_IZQUIERDA:1',
+      'SENSOR:FC:x_izq:1',
+      'SENSOR:FC:X_IZQ:2',
+      'SENSOR:FC:X_DER:true',
+      'SENSOR:FC:Z_ARRIBA:',
+      'SENSOR:FC:Z_ABAJO:01',
+      'SENSOR:FC:18:1',
+      'SENSOR:FC:X_IZQ:1:extra',
+      'SENSOR:FC: X_IZQ:1',
+      'LIMITE:FINAL_X_IZQ',
+      'LIMITE:FINAL_Z_ARRIBA:1',
+    ]) {
+      expect(
+        parser.parse(packet).type,
+        Esp32MessageType.unknown,
+        reason: packet,
+      );
+    }
+  });
 
   test('existing command payloads remain unchanged', () {
     expect(Esp32Command.values.map((command) => command.payload), [

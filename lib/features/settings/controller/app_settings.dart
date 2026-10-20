@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../core/models/esp32_device.dart';
+import '../../vision/domain/vision_endpoint.dart';
 
 enum BlanquitaVisualTheme { original, hamburger, custom }
 
@@ -24,6 +26,8 @@ class AppSettings {
     this.assistantTechnical = true,
     this.assistantAnimations = true,
     this.websocketUrl = '',
+    this.esp32LaboratoryMode = false,
+    this.selectedEsp32,
     this.autoReconnect = true,
     this.hapticsEnabled = true,
     this.confirmSequence = true,
@@ -38,7 +42,7 @@ class AppSettings {
     this.visualSensitivity = 0.65,
     this.visionWebsocketUrl = '',
     this.visionAutoReconnect = true,
-    this.visionHeartbeatTimeout = const Duration(seconds: 5),
+    this.visionHeartbeatTimeout = VisionEndpoint.heartbeatTimeout,
     this.visionMinimumConfidence = 0.8,
   });
 
@@ -54,6 +58,13 @@ class AppSettings {
   final bool assistantTechnical;
   final bool assistantAnimations;
   final String websocketUrl;
+  static const multiDeviceDeployment = bool.fromEnvironment(
+    'BLANQUITA_MULTI_DEVICE',
+  );
+  final bool esp32LaboratoryMode;
+  final Esp32Device? selectedEsp32;
+  bool get laboratoryEnabled =>
+      esp32LaboratoryMode && !multiDeviceDeployment && selectedEsp32 == null;
   final bool autoReconnect;
   final bool hapticsEnabled;
   final bool confirmSequence;
@@ -84,6 +95,8 @@ class AppSettings {
     bool? assistantTechnical,
     bool? assistantAnimations,
     String? websocketUrl,
+    bool? esp32LaboratoryMode,
+    Object? selectedEsp32 = _unchanged,
     bool? autoReconnect,
     bool? hapticsEnabled,
     bool? confirmSequence,
@@ -114,6 +127,10 @@ class AppSettings {
       assistantTechnical: assistantTechnical ?? this.assistantTechnical,
       assistantAnimations: assistantAnimations ?? this.assistantAnimations,
       websocketUrl: websocketUrl ?? this.websocketUrl,
+      esp32LaboratoryMode: esp32LaboratoryMode ?? this.esp32LaboratoryMode,
+      selectedEsp32: identical(selectedEsp32, _unchanged)
+          ? this.selectedEsp32
+          : selectedEsp32 as Esp32Device?,
       autoReconnect: autoReconnect ?? this.autoReconnect,
       hapticsEnabled: hapticsEnabled ?? this.hapticsEnabled,
       confirmSequence: confirmSequence ?? this.confirmSequence,
@@ -135,3 +152,5 @@ class AppSettings {
     );
   }
 }
+
+const _unchanged = Object();

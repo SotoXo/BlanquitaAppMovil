@@ -20,15 +20,15 @@ void main() {
       expect(settings.settings.visionAutoReconnect, true);
       expect(
         settings.settings.visionHeartbeatTimeout,
-        const Duration(seconds: 5),
+        const Duration(seconds: 6),
       );
       expect(settings.settings.visionMinimumConfidence, .8);
-      await settings.setVisionWebsocketUrl(' ws://laptop:8765/ ');
+      await settings.setVisionWebsocketUrl(' ws://laptop:8765/vision ');
       await settings.setVisionAutoReconnect(false);
       await settings.setVisionHeartbeatTimeout(const Duration(seconds: 10));
       await settings.setVisionMinimumConfidence(.92);
       final loaded = repository.load();
-      expect(loaded.visionWebsocketUrl, 'ws://laptop:8765/');
+      expect(loaded.visionWebsocketUrl, 'ws://laptop:8765/vision');
       expect(loaded.visionAutoReconnect, false);
       expect(loaded.visionHeartbeatTimeout, const Duration(seconds: 10));
       expect(loaded.visionMinimumConfidence, .92);
@@ -49,9 +49,42 @@ void main() {
       );
       expect(
         repository.load().visionHeartbeatTimeout,
-        const Duration(seconds: 1),
+        const Duration(seconds: 6),
       );
       expect(repository.load().visionMinimumConfidence, 1);
+    },
+  );
+
+  test(
+    'loading migrates historic URL and 5 second heartbeat on disk',
+    () async {
+      SharedPreferences.setMockInitialValues({
+        'vision.websocket_url': 'ws://192.168.137.233:8765/',
+        'vision.heartbeat_timeout_ms': 5000,
+      });
+      final preferences = await SharedPreferences.getInstance();
+      final settings = SettingsController(SettingsRepository(preferences));
+      addTearDown(settings.dispose);
+      await settings.load();
+      expect(
+        settings.settings.visionWebsocketUrl,
+        'ws://192.168.137.233:8765/vision',
+      );
+      expect(
+        preferences.getString('vision.websocket_url'),
+        settings.settings.visionWebsocketUrl,
+      );
+      expect(preferences.getInt('vision.heartbeat_timeout_ms'), 6000);
+      await settings.setVisionWebsocketUrl('ws://192.168.137.233:8765/vision/');
+      expect(
+        preferences.getString('vision.websocket_url'),
+        'ws://192.168.137.233:8765/vision',
+      );
+      await settings.setVisionHeartbeatTimeout(const Duration(seconds: 5));
+      expect(
+        settings.settings.visionHeartbeatTimeout,
+        const Duration(seconds: 6),
+      );
     },
   );
 }
