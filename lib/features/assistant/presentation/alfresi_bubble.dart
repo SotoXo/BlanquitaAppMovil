@@ -14,41 +14,48 @@ class AlfresiBubble extends StatelessWidget {
   final AlfresiMood mood;
   @override
   Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
+      AlfresiAvatar(size: AlfresiSizes.l, mood: mood),
+      const SizedBox(width: BlanquitaSpacing.sm),
       Expanded(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: BlanquitaColors.hamburger.coldWhite,
-            border: Border.all(color: BlanquitaColors.hamburger.cyanDeep),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: BlanquitaColors.hamburger.canvas,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  message,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: BlanquitaColors.hamburger.graphite,
-                  ),
-                ),
-              ],
+        child: CustomPaint(
+          painter: const _BubbleTail(),
+          child: Container(
+            padding: BlanquitaSpacing.compact,
+            decoration: BoxDecoration(
+              color: BlanquitaColors.cream,
+              borderRadius: BlanquitaRadius.card,
+            ),
+            child: Text(
+              message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: BlanquitaColors.backgroundDeep,
+                fontWeight: FontWeight.w500,
+                height: 1.35,
+              ),
             ),
           ),
         ),
       ),
-      const SizedBox(width: 8),
-      AlfresiAvatar(size: 72, mood: mood),
     ],
   );
+}
+
+class _BubbleTail extends CustomPainter {
+  const _BubbleTail();
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawPath(
+      Path()
+        ..moveTo(1, 17)
+        ..lineTo(-7, 22)
+        ..lineTo(1, 30)
+        ..close(),
+      Paint()..color = BlanquitaColors.cream,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_BubbleTail oldDelegate) => false;
 }

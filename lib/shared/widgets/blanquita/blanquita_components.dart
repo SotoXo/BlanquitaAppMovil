@@ -69,12 +69,19 @@ class BlanquitaDeviceCard extends StatelessWidget {
   final IconData icon;
   @override
   Widget build(BuildContext context) => BlanquitaCard(
+    padding: BlanquitaSpacing.compact,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(height: BlanquitaDesign.gap),
-        Text(name, style: Theme.of(context).textTheme.titleMedium),
+        Row(
+          children: [
+            Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(name, style: Theme.of(context).textTheme.titleMedium),
+            ),
+          ],
+        ),
         const SizedBox(height: 8),
         BlanquitaStatus(
           label: status,

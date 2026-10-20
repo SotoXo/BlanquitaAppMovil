@@ -1,3 +1,5 @@
+import '../../app/design/blanquita_design.dart';
+import 'blanquita/blanquita_scaffold.dart';
 import 'package:provider/provider.dart';
 import '../../features/settings/controller/settings_controller.dart';
 import '../../features/settings/controller/app_settings.dart';
@@ -23,6 +25,29 @@ class PageHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (context.watch<SettingsController>().settings.visualTheme !=
+        BlanquitaVisualTheme.original) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          BlanquitaHeader(title: title),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                eyebrow,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: BlanquitaColors.of(context).steel,
+                ),
+              ),
+              ?trailing,
+            ],
+          ),
+        ],
+      );
+    }
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

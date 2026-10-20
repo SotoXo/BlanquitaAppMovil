@@ -29,7 +29,7 @@ class AlfresiButton extends StatelessWidget {
         button: true,
         label: 'Abrir ALFRESI, tu asistente BLANQUITA',
         child: Material(
-          color: Theme.of(context).colorScheme.surface,
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(18),
           child: InkWell(
             borderRadius: BorderRadius.circular(18),
@@ -41,7 +41,7 @@ class AlfresiButton extends StatelessWidget {
               builder: (_) => AlfresiPanel(section: section),
             ),
             child: Padding(
-              padding: const EdgeInsets.all(4),
+              padding: const EdgeInsets.all(0),
               child: AlfresiAvatar(
                 mood: s.assistantAlerts ? message.mood : AlfresiMood.idle,
               ),

@@ -1,3 +1,6 @@
+import '../../settings/controller/app_settings.dart';
+import '../../assistant/presentation/alfresi_bubble.dart';
+import '../../assistant/services/alfresi_rules.dart';
 import '../../assistant/domain/alfresi_context.dart';
 import '../../vision/controller/vision_controller.dart';
 import '../../diagnostics/presentation/diagnostics_screen.dart';
@@ -49,6 +52,23 @@ class ControlScreen extends StatelessWidget {
                     trailing: ConnectionBadge(phase: state.connection),
                   ),
                 ),
+                if (preferences.visualTheme != BlanquitaVisualTheme.original &&
+                    preferences.assistantEnabled &&
+                    preferences.assistantTips) ...[
+                  const SizedBox(height: 12),
+                  AlfresiBubble(
+                    message:
+                        lockReason ??
+                        'Mantén pulsada una dirección. Suelta para detener.',
+                    mood: AlfresiRules.explain(
+                      AlfresiContext.read(
+                        machine,
+                        context.watch<VisionController>(),
+                        'Control',
+                      ),
+                    ).mood,
+                  ),
+                ],
                 const SizedBox(height: 15),
                 if (state.finalLimitActive == true) ...[
                   SafetyBanner(
@@ -276,6 +296,98 @@ class _ControlPad extends StatelessWidget {
           enabled: enabled || state.activeMovement == direction,
           active: state.activeMovement == direction,
         );
+    final warm =
+        context.watch<SettingsController>().settings.visualTheme !=
+        BlanquitaVisualTheme.original;
+    if (warm && MediaQuery.textScalerOf(context).scale(14) < 23) {
+      return LayoutBuilder(
+        builder: (context, c) {
+          final size = c.maxWidth.clamp(0.0, 264.0);
+          final button = size * .25;
+          final stop = size * .30;
+          Widget position(double x, double y, Widget child, double extent) =>
+              Positioned(
+                left: x * size - extent / 2,
+                top: y * size - extent / 2,
+                width: extent,
+                height: extent,
+                child: child,
+              );
+          return SizedBox.square(
+            dimension: size,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Padding(
+                    padding: EdgeInsets.all(size * .12),
+                    child: Transform.rotate(
+                      angle: .785398,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: BlanquitaColors.of(context).canvas,
+                          borderRadius: BorderRadius.circular(
+                            BlanquitaRadius.control,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                position(
+                  .5,
+                  .16,
+                  move(
+                    MovementDirection.zUp,
+                    Icons.keyboard_arrow_up_rounded,
+                    'Z+',
+                  ),
+                  button,
+                ),
+                position(
+                  .16,
+                  .5,
+                  move(
+                    MovementDirection.xLeft,
+                    Icons.keyboard_arrow_left_rounded,
+                    'X−',
+                  ),
+                  button,
+                ),
+                position(
+                  .5,
+                  .5,
+                  _StopButton(
+                    enabled: state.isConnected,
+                    onPressed: machine.stopNow,
+                  ),
+                  stop,
+                ),
+                position(
+                  .84,
+                  .5,
+                  move(
+                    MovementDirection.xRight,
+                    Icons.keyboard_arrow_right_rounded,
+                    'X+',
+                  ),
+                  button,
+                ),
+                position(
+                  .5,
+                  .84,
+                  move(
+                    MovementDirection.zDown,
+                    Icons.keyboard_arrow_down_rounded,
+                    'Z−',
+                  ),
+                  button,
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 480),
       child: Column(
@@ -818,6 +930,7 @@ class _EmergencyDock extends StatelessWidget {
     child: FilledButton(
       onPressed: machine.state.isConnected ? machine.emergencyStop : null,
       style: FilledButton.styleFrom(
+        side: BorderSide(color: BlanquitaColors.of(context).danger),
         backgroundColor: BlanquitaColors.of(context).danger,
         foregroundColor: Colors.white,
         disabledBackgroundColor: BlanquitaColors.of(

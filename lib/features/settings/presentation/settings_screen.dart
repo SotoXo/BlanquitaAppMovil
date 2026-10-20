@@ -1,3 +1,4 @@
+import '../../assistant/presentation/alfresi_bubble.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -56,6 +57,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 const SizedBox(height: 18),
+                if (settings.visualTheme != BlanquitaVisualTheme.original &&
+                    settings.assistantEnabled &&
+                    settings.assistantTips) ...[
+                  const AlfresiBubble(
+                    message: 'Aquí puedes personalizar BLANQUITA a tu gusto.',
+                  ),
+                  const SizedBox(height: BlanquitaSpacing.lg),
+                ],
                 const PersonalizationPanel(),
                 const SizedBox(height: 18),
                 const WifiNetworkPanel(),

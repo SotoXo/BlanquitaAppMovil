@@ -3,6 +3,8 @@ import '../../features/settings/controller/app_settings.dart';
 import '../theme/app_theme.dart';
 import 'blanquita_colors.dart';
 export 'blanquita_colors.dart';
+export 'blanquita_tokens.dart';
+import 'blanquita_tokens.dart';
 
 class BlanquitaTextScaler extends TextScaler {
   const BlanquitaTextScaler(this.system, this.factor);
@@ -96,12 +98,45 @@ abstract final class BlanquitaDesign {
         (original
                 ? base.textTheme
                 : base.textTheme.copyWith(
-                    headlineMedium: base.textTheme.headlineMedium?.copyWith(
-                      fontSize: 30,
+                    headlineMedium: const TextStyle(
+                      fontSize: BlanquitaTypography.appTitle,
+                      fontWeight: FontWeight.w700,
                       height: 1.12,
                     ),
-                    titleLarge: base.textTheme.titleLarge?.copyWith(
-                      fontSize: 20,
+                    headlineSmall: const TextStyle(
+                      fontSize: BlanquitaTypography.pageTitle,
+                      fontWeight: FontWeight.w700,
+                      height: 1.16,
+                    ),
+                    titleLarge: const TextStyle(
+                      fontSize: BlanquitaTypography.state,
+                      fontWeight: FontWeight.w700,
+                      height: 1.2,
+                    ),
+                    titleMedium: const TextStyle(
+                      fontSize: BlanquitaTypography.cardTitle,
+                      fontWeight: FontWeight.w600,
+                      height: 1.2,
+                    ),
+                    bodyLarge: const TextStyle(
+                      fontSize: BlanquitaTypography.body,
+                      height: 1.4,
+                    ),
+                    bodyMedium: const TextStyle(
+                      fontSize: BlanquitaTypography.body,
+                      height: 1.4,
+                    ),
+                    bodySmall: const TextStyle(
+                      fontSize: BlanquitaTypography.secondary,
+                      height: 1.35,
+                    ),
+                    labelLarge: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    labelSmall: const TextStyle(
+                      fontSize: BlanquitaTypography.micro,
+                      height: 1.2,
                     ),
                   ))
             .apply(
@@ -118,6 +153,18 @@ abstract final class BlanquitaDesign {
           ? VisualDensity.compact
           : VisualDensity.standard,
       iconTheme: IconThemeData(size: 21 * d, color: scheme.onSurface),
+      chipTheme: original
+          ? base.chipTheme
+          : base.chipTheme.copyWith(
+              backgroundColor: effective.graphiteRaised,
+              selectedColor: effective.cyan.withValues(alpha: .22),
+              side: BorderSide(
+                color: effective.cyanDeep.withValues(alpha: .35),
+              ),
+              labelStyle: text.labelSmall?.copyWith(color: effective.coldWhite),
+              checkmarkColor: effective.cyan,
+              shape: RoundedRectangleBorder(borderRadius: BlanquitaRadius.card),
+            ),
       switchTheme: SwitchThemeData(
         trackColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
@@ -133,6 +180,11 @@ abstract final class BlanquitaDesign {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           textStyle: TextStyle(fontFamily: font, fontWeight: FontWeight.w600),
+          elevation: original ? 0 : 2,
+          shadowColor: effective.cyanDeep.withValues(alpha: .25),
+          side: original
+              ? BorderSide.none
+              : BorderSide(color: effective.cyan.withValues(alpha: .5)),
           minimumSize: Size(touch, (54 * d).clamp(touch, 72)),
           padding: EdgeInsets.symmetric(horizontal: 20 * d, vertical: 15 * d),
           shape: RoundedRectangleBorder(
@@ -148,6 +200,9 @@ abstract final class BlanquitaDesign {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
+          side: original
+              ? null
+              : BorderSide(color: effective.cyanDeep.withValues(alpha: .45)),
           minimumSize: Size(touch, (52 * d).clamp(touch, 72)),
           padding: EdgeInsets.symmetric(horizontal: 18 * d, vertical: 14 * d),
           textStyle: TextStyle(fontFamily: font, fontWeight: FontWeight.w600),

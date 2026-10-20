@@ -63,7 +63,9 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
     final foreground = widget.active
         ? BlanquitaColors.of(context).canvas
         : widget.enabled
-        ? Theme.of(context).colorScheme.onSurface
+        ? (warm
+              ? BlanquitaColors.of(context).cyan
+              : Theme.of(context).colorScheme.onSurface)
         : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5);
 
     return Semantics(
@@ -84,10 +86,12 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
           child: AnimatedContainer(
             duration: duration,
             curve: Curves.easeOutCubic,
-            constraints: const BoxConstraints(minWidth: 48, minHeight: 84),
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
             padding: const EdgeInsets.all(1.2),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(warm ? 44 : 23),
+              borderRadius: BorderRadius.circular(
+                warm ? BlanquitaRadius.control : 23,
+              ),
               color: warm
                   ? (widget.active
                         ? BlanquitaColors.of(context).cyan
@@ -139,7 +143,9 @@ class _HoldToMoveButtonState extends State<HoldToMoveButton> {
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(warm ? 43 : 21.8),
+                borderRadius: BorderRadius.circular(
+                  warm ? BlanquitaRadius.control : 21.8,
+                ),
                 color: widget.active
                     ? BlanquitaColors.of(context).cyan
                     : widget.enabled

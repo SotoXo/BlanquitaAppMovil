@@ -1,3 +1,5 @@
+import 'vision_overview.dart';
+import '../../settings/controller/app_settings.dart';
 import '../../../core/diagnostics/connection_log.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -28,6 +30,9 @@ class VisionScreen extends StatelessWidget {
     final lowConfidence =
         report?.confidence != null &&
         report!.confidence! < settings.visionMinimumConfidence;
+    if (settings.visualTheme != BlanquitaVisualTheme.original) {
+      return const VisionOverview();
+    }
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(

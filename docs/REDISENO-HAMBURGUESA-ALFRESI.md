@@ -1,144 +1,125 @@
-# BLANQUITA ALFRESI — frontend, temas y personalización
+# BLANQUITA ALFRESI — refinamiento visual y lluvia de hamburguesas
 
-Fecha: 20 de octubre de 2026.
+Fecha: 20 de octubre de 2026. Rama: `feat/victor-hamburger-ui`.
 
-## Rama y base funcional
+## Base y alcance
 
-Desarrollo en `feat/victor-hamburger-ui`, creada desde `feature/victor` después de `git fetch --all`, checkout y `git pull --ff-only origin feature/victor`. Base: `495b6ae`.
+Base funcional de `feature/victor`: `495b6ae`. Checkpoint previo al refinamiento: `dd946db` (`chore: checkpoint antes de refinamiento visual alfresi`). El stash anterior de `fix/autoconnect-stability` permanece preservado y no se aplicó sobre esta rama.
 
-Antes del checkout había modificaciones locales en `analysis_options.yaml` y `pubspec.lock` de `fix/autoconnect-stability`. Se preservaron en el stash `preservado-antes-ui-victor-2026-10-20`; no se aplicaron sobre esta rama.
+Se cambió presentación Flutter, recursos visuales y pruebas del frontend. No se modificaron los controladores, modelos operativos, servicios, protocolo, reconexión, almacenamiento funcional, lifecycle operativo ni código Kotlin. Los callbacks de movimiento, pinza, velocidad, secuencia, STOP y emergencia continúan llamando las acciones públicas existentes con las mismas condiciones de habilitación.
 
-Los controladores `MachineController` y `VisionController`, modelos operativos, servicios de red, protocolo, firmware y código nativo de comunicación permanecen sin cambios. Las adiciones en almacenamiento y en el controlador de Ajustes corresponden exclusivamente a preferencias visuales. La interfaz llama las acciones públicas existentes.
+La revisión previa y la comparación de las 13 pantallas, con correcciones posteriores a abrir cada captura, están en [comparacion.md](evidencias/ui-final/comparacion.md).
 
-## Aplicación independiente y respaldo
+## Identidad y respaldo Android
 
-| Identidad Android | Aplicación anterior | Variante visual |
+| Variante | Nombre | Application ID |
 | --- | --- | --- |
-| Nombre | BLANQUITA Víctor | **BLANQUITA ALFRESI** |
-| Application ID | `com.example.blanquita.victor` | `com.example.blanquita.alfresi` |
-| Icono | Anterior | Robot crema y dorado |
+| Respaldo | BLANQUITA Víctor | `com.example.blanquita.victor` |
+| Interfaz nueva | BLANQUITA ALFRESI | `com.example.blanquita.alfresi` |
 
-Los identificadores diferentes permiten instalar ambas aplicaciones. Las preferencias y direcciones de conexión de la nueva variante quedan separadas por Android. No se copian ni borran los datos del respaldo. El namespace y la actividad nativa siguen siendo los existentes.
+Se mantiene el ID independiente creado en el checkpoint y se actualiza solo el icono vectorial del launcher a la marca hamburguesa. La actividad y el namespace nativos conservan sus valores. Instalar la variante visual no sustituye el paquete Víctor ni comparte sus preferencias por Android.
 
-APK de entrega: `../build/app/outputs/flutter-apk/blanquita-alfresi-debug.apk`.
+APK: `build/app/outputs/flutter-apk/blanquita-alfresi-debug.apk`.
 
-## Pantallas modificadas
+## Pantallas
 
-1. **Inicio:** jerarquía de estado general, robot cartesiano, conexiones, robot/sensores y actividad; aviso contextual de ALFRESI. Valores desconocidos permanecen como “Sin datos” o “—”.
-2. **Control:** direcciones redondeadas con iconos; estado activo amarillo; candado, motivo concreto de bloqueo y diagnóstico; STOP central rojo; detención inmediata independiente y ancha; pinza y velocidad conservan sus acciones existentes. La velocidad sigue expresándose como incremento/decremento solicitado: el sistema no entrega una velocidad absoluta.
-3. **Visión · laptop:** conexión independiente, sistema, último reporte y alertas. No se agregó video ni telemetría nueva.
-4. **Ajustes:** selector de temas con paletas, personalización, efectos y ALFRESI; se conservan las conexiones y ajustes operativos anteriores.
-5. **Diagnósticos:** selector Conexiones/Sistema/Logs; fases, datos y bitácora anteriores; copiar y limpiar mantienen sus funciones públicas.
-6. **Navegación:** se conservan las cuatro rutas/destinos y el `PageController`. Con texto muy grande se da mayor anchura a la sección seleccionada y se mantienen los otros destinos mediante iconos, etiquetas semánticas y tooltips.
-
-## Componentes creados
-
-| Archivo | Componentes / responsabilidad |
+| Pantalla | Resultado |
 | --- | --- |
-| `lib/app/design/blanquita_colors.dart` | `BlanquitaColors`, paleta semántica e interpolación |
-| `lib/app/design/blanquita_design.dart` | `BlanquitaDesign`, medidas, movimiento, densidad, tipografía y `BlanquitaTextScaler` |
-| `lib/app/design/visual_transition.dart` | `VisualTransition` |
-| `lib/shared/widgets/blanquita/blanquita_components.dart` | `BlanquitaCard`, `BlanquitaButton`, `BlanquitaStatus`, `BlanquitaDeviceCard`, `BlanquitaSection`, `BlanquitaSegmentedControl` |
-| `lib/shared/widgets/blanquita/blanquita_brand.dart` | `BlanquitaBrand`, marca vectorial local |
-| `lib/shared/widgets/blanquita/blanquita_lock_state.dart` | `BlanquitaLockState`, `BlanquitaErrorState` |
-| `lib/shared/widgets/blanquita/blanquita_timeline.dart` | `BlanquitaTimeline` |
-| `lib/shared/widgets/blanquita/blanquita_modal.dart` | `BlanquitaModal` con info, éxito, advertencia, error, confirmación y proceso |
-| `lib/shared/widgets/blanquita/blanquita_connection_feedback.dart` | Presentación del resultado, espera y cancelación de la prueba de conexión existente |
-| `lib/features/settings/presentation/personalization_panel.dart` | `PersonalizationPanel` |
-| `lib/features/assistant/domain/alfresi_context.dart` | `AlfresiContext`, lectura de estados públicos y motivos de bloqueo |
-| `lib/features/assistant/domain/alfresi_message.dart` | `AlfresiMessage`, `AlfresiMood` |
-| `lib/features/assistant/services/alfresi_rules.dart` | `AlfresiRules`, explicación determinista |
-| `lib/features/assistant/presentation/alfresi_avatar.dart` | `AlfresiAvatar`, fallback vectorial y estados visuales |
-| `lib/features/assistant/presentation/alfresi_bubble.dart` | `AlfresiBubble`, mensaje integrado sin cubrir controles |
-| `lib/features/assistant/presentation/alfresi_panel.dart` | `AlfresiButton`, `AlfresiPanel` |
+| Splash | Marca, frutilla grande, título, progreso visual de arranque y fondo cálido. No espera ni posterga conexiones. Reduce Motion omite la animación introductoria. |
+| Inicio | Header compacto, burbuja crema, conexiones primero y visualizador cartesiano existente; estado al pie, sensores y actividad real. |
+| Dispositivos | Equipos configurados, endpoints seguros y estado confirmado. Diagrama estático con aviso de que esta base no expone discovery. |
+| Vinculación | Timeline Conectar → Confirmar READY, fase pública y detalles de conexión. |
+| Control | Pad radial con direcciones, STOP rojo central, detención independiente, motivo de bloqueo, pinza y velocidad originales. Al 200 % se utiliza la distribución flexible. |
+| Visión | Conexión, placeholder explícito sin streaming, sistema, último reporte y alertas. Acciones existentes disponibles en desplegable. |
+| Diagnósticos | Header único, Conexiones/Sistema/Logs y timeline de eventos. Copiar bitácora y limpiar conservan sus callbacks. |
+| Ajustes | Filas con icono/valor, selector rápido y hojas de detalle enfocadas en texto, efectos o asistente. Conexiones y ajustes operativos conservados. |
+| Tema visual | Tres previews locales, selección temporal y Aplicar tema. |
+| Modales/bloqueo | ALFRESI según emoción, icono semántico, mensaje real y acciones existentes; panel rojo, verde o azul según estado. |
 
-También se adaptaron los componentes compartidos anteriores: superficies, encabezados, estado, navegación y esquema cartesiano.
+Hamburguesa utiliza cinco destinos: Inicio, Dispositivos, Control, Visión y Ajustes. Se conserva el `PageController`, los cuatro índices previos y sus páginas. Dispositivos se agrega como vista de presentación. Original conserva su navegación y composición de Inicio anteriores.
 
-## Tema Original
+## Tokens y componentes
 
-Conserva la paleta grafito/cian y el material glass de la experiencia anterior. Conserva la composición original de Inicio. Recibe las mejoras compartidas de accesibilidad, estados, ajustes y ALFRESI.
+`lib/app/design/blanquita_tokens.dart` centraliza espaciado (4/8/12/16/24), radios (12/18/22/28), tipografía y movimiento. `BlanquitaColors` es un `ThemeExtension` interpolable.
 
-## Tema Hamburguesa
+| Token | Valor base |
+| --- | --- |
+| backgroundDeep / background | #17100B / #21150D |
+| surface / surfaceSoft / surfaceRaised | #321F10 / #3A2515 / #4A2A12 |
+| brownStrong | #6D360F |
+| cream / creamMuted | #F6EBD3 / #AAA59A |
+| cheese / cheddar | #F1B822 / #CA6730 |
+| lettuce / success | #7AC227 / #29D24A |
+| ketchup / danger | #DD1415 / #FF2B25 |
+| info | #43A7D8 |
 
-Tema inicial de esta variante. Fondo marrón oscuro, superficies opacas, bordes dorados, texto crema y controles con forma definida, tomando la imagen de referencia como dirección visual.
+Amarillo para selección y acción, verde para confirmación, atención cálida para espera y rojo para seguridad/STOP. El modal esperando usa azul informativo. Las tarjetas son opacas, con borde cálido y sombra opcional; no tienen blur por tarjeta.
 
-Las superficies de Hamburguesa y Personalizado no utilizan glass ni blur de tarjetas. Se conservan sombras moderadas opcionales. El difuminado de las transiciones es un efecto independiente y desactivable.
+Componentes compartidos creados o consolidados:
 
-- Amarillo: selección, acción principal y marca.
-- Verde: conexión o resultado correcto confirmado.
-- Naranja: espera, atención y datos pendientes.
-- Rojo: errores, bloqueo de seguridad, STOP y detención inmediata.
+- `BlanquitaScaffold`, `BlanquitaHeader`, `PageHeader`.
+- `BlanquitaCard`, `GlassSurface`/`GlassPanel` con ramas de tema.
+- `BlanquitaButton`, `GlassButton`, estilos Filled/Outlined y botones de movimiento existentes.
+- `BlanquitaStatus`, `BlanquitaDeviceCard`, `BlanquitaSection`, `BlanquitaSegmentedControl`.
+- `BlanquitaBottomNavigation`, `BlanquitaTimeline`, `BlanquitaModal`, `BlanquitaLockState`, `BlanquitaErrorState`.
+- `BlanquitaBrand`/`BurgerMarkPainter`, `AppBackground`/pintor de lluvia.
+- `AlfresiAvatar`, `AlfresiBubble`, `AlfresiButton`, `AlfresiPanel`.
+- `BlanquitaSplash`, `StartupPresentation`, `DevicesScreen`, `DeviceRadarPainter`, `BindingScreen`, `VisionOverview`, `ThemeVisualScreen`, `PersonalizationPanel`.
 
-Se mantuvo la representación cartesiana existente del robot. No se inventó un brazo articulado, una cámara de video, autenticación V2, una dirección, un porcentaje de velocidad ni reportes para reproducir datos del mockup.
+## Fondo y movimiento
+
+El fondo local `assets/alfresi/fondo_hamburguesa.png` coloca hamburguesas iluminadas en las esquinas y reserva el centro oscuro para lectura. Una capa `CustomPainter` dibuja 16 hamburguesas pequeñas con caída y oscilación moderadas. No usa emojis, dependencias nuevas, timers ni búsquedas reales.
+
+La lluvia se ejecuta durante 10 segundos al entrar/cambiar de pantalla o tema y después se asienta para ahorrar batería. El mismo elemento hijo permanece montado. `RepaintBoundary` aísla el repintado decorativo y el pintor no requiere capas offscreen por partícula. El fondo y la lluvia no capturan gestos ni aparecen en la lectura semántica.
+
+Reduce Motion, la accesibilidad del sistema y modo rendimiento detienen el movimiento. El fondo ilustrado sigue visible, sin volver a un fondo plano. Original conserva su fondo industrial previo.
+
+Las microinteracciones utilizan 190 ms, modales 220 ms y cambio de tema 400 ms con `easeOutCubic`. El tema interpola superficies mediante `ThemeData`/`ThemeExtension`; `VisualTransition` añade fade parcial y blur ligero desactivable sobre el mismo hijo. No reinicia providers, rutas ni conexiones. El splash es solo de arranque, nunca se utiliza al cambiar tema.
 
 ## Personalización
 
-- Tema visual Original, Hamburguesa o Personalizado, independiente de Oscuro/Claro/Sistema.
-- Personalizado permite elegir el acento Queso, Sésamo o Cian; conserva la semántica de seguridad.
-- Tipografía Outfit local o tipografía del sistema.
-- Texto Pequeño/Normal/Grande.
-- Interfaz Compacta/Normal/Grande: cambia padding, radio, tamaño de iconos y alturas de componentes. Las acciones principales conservan un mínimo táctil de 48 px.
-- Animaciones, difuminado, sombras, efectos del asistente y modo rendimiento.
-- ALFRESI: habilitar asistente, consejos contextuales, avisos importantes, detalles técnicos y animaciones.
+- Original / Hamburguesa / Personalizado, independiente de Oscuro / Claro / Sistema.
+- Acento personalizado Queso / Sésamo / Cian, conservando colores de seguridad.
+- Outfit local / Sistema; texto Pequeño / Normal / Grande; interfaz Compacta / Normal / Grande.
+- Animaciones, difuminado de transición, sombras y modo rendimiento.
+- ALFRESI: asistente, consejos, avisos, detalles técnicos y efectos.
 
-Todas las nuevas preferencias usan claves `ui.*` en el repositorio existente. Los ajustes de tamaño se combinan con `MediaQuery.textScaler`; no se limita ni reemplaza la accesibilidad del dispositivo por una escala fija.
+Se consumen las preferencias persistidas existentes del checkpoint. El tamaño se combina con `MediaQuery.textScaler`; no se limita la escala del sistema. Las acciones importantes conservan 48 px de área táctil y los botones bloqueados muestran candado además de color.
 
-## Transiciones y rendimiento
+## ALFRESI y recursos
 
-El `MaterialApp` interpola `ThemeData` y `BlanquitaColors` durante 400 ms con `easeOutCubic`. `VisualTransition` añade un fade parcial y un blur ligero sobre **el mismo elemento hijo**. No hay splash, navegación ni claves que sustituyan el árbol de rutas. Los providers globales siguen usando las instancias recibidas por `.value`.
+Se usa la **frutilla exacta enviada por el usuario**: `assets/alfresi/referencia_frutilla.png` conserva el archivo original sin alteración. `AlfresiAvatar` selecciona viewports de su atlas para normal, feliz, pensando, atención y error, y el personaje grande del splash. No se sustituyó por una nueva frutilla ni por un robot. Los recursos del robot del checkpoint permanecen como archivos históricos sin usarse en el avatar actual.
 
-Los modales comunes usan fade y escala 0.96 → 1 en 220 ms, con difuminado ligero opcional. La presentación de una prueba de conexión utiliza la acción pública existente y permite cancelar mediante la desconexión pública existente.
+Tamaños centralizados: 24, 32, 48, 64, 112 y 220 px. Modales usan una expresión de 96 px. Las burbujas tienen fondo crema, texto marrón y cola pequeña. El header utiliza 48 px para el acceso al panel.
 
-Reduce Motion del sistema, la preferencia de reducción de movimiento y el modo rendimiento reducen las animaciones y efectos. Las superficies de Hamburguesa no ejecutan blur por tarjeta. ALFRESI realiza movimientos breves y discretos, sin animación continua costosa.
+El contexto y las reglas de ALFRESI permanecen sin cambios: leen estados públicos de Machine/Vision, disponibilidad manual, transporte, fase y sección. Explican conexiones independientes, espera READY, error real, final de carrera, bloqueo manual, secuencia y estados desconocidos. El panel ofrece Resumen, Diagnóstico, Ayuda y evidencia “¿Por qué?”. Solo puede navegar a Diagnósticos; no ejecuta movimiento, pinza, secuencia, STOP o emergencia. No hay API, LLM ni dependencia de Internet durante el uso.
 
-## Fuente de verdad y vinculación
+El fondo de hamburguesas sí es un recurso nuevo generado para el proyecto. No se utilizó una imagen generativa como captura de la aplicación. Las búsquedas visuales se usaron como inspiración; el recurso final se almacena localmente.
 
-Se inspeccionaron los estados y acciones reales antes del diseño. Esta base expone transporte abierto y confirmación `READY`, además de los estados independientes de Visión. No expone las etapas desafío/autenticar/autorizar del mockup. La timeline muestra **Conectar → Confirmar READY** y la fase pública observada en detalles técnicos.
+## Verificación y capturas
 
-La búsqueda de dispositivos no está disponible en esta base funcional. Por eso no se agregó un radar que fingiera buscar, ni se modificó la comunicación para introducir discovery.
+Resultados finales: [validacion/RESULTADOS.md](evidencias/ui-final/validacion/RESULTADOS.md).
 
-## ALFRESI
+Los 116 tests anteriores se conservan sin modificar. Se añadieron 15 goldens, siete escenarios responsive y pruebas de movimiento reducido y de aplicación explícita del tema conservando ruta, instancias, conexiones y logs. La prueba previa con canales WebSocket de test sigue verificando que cambiar de tema no recrea los controladores reales.
 
-ALFRESI es una interpretación local y determinista; no usa LLM, API externa ni Internet durante el funcionamiento.
+Las capturas/goldens se generan con Flutter, fuentes locales y escenarios de prueba deterministas a 390×844, exportados al doble de resolución. Los dominios `.test`, conexiones y logs de ejemplo se limitan a tests, no se inyectan en la app real. También se verifica 360/390/412, tablet y landscape, con texto de sistema al 200 % y opciones de texto/densidad Grande.
 
-Lee `MachineState`, `VisionState`, `manualControlsLocked`, `canStartMovement`, `transportOpen`, `phase` y la sección actual. El contexto es una vista efímera de los valores públicos, sin un controlador paralelo ni una copia mutable del estado del robot.
-
-Explica:
-
-- Falta de conexión o confirmación READY.
-- Diferencia entre control ESP32 y visión de la laptop.
-- Error entregado por el sistema, sin atribuir una causa no demostrada.
-- Secuencia activa y bloqueo manual.
-- Final de carrera activo, con prioridad sobre otros mensajes.
-- Visión no lista, alertas o reporte caducado.
-- Sensores desconocidos: no concluye “seguridad libre” si falta el dato.
-
-El panel contiene Resumen, Diagnóstico y Ayuda. “¿Por qué?” muestra evidencia. Los detalles técnicos pueden desactivarse. La única navegación ofrecida lleva a Diagnósticos; ALFRESI no ofrece acciones físicas ni mueve, abre/cierra pinza, inicia secuencias, ejecuta STOP o dispara emergencia. Esas acciones permanecen en Control y requieren interacción explícita.
-
-El avatar está integrado en encabezados y mensajes: no cubre STOP, direcciones, emergencia ni navegación. Sus estados idle/success/warning/error/thinking se distinguen con símbolos y color.
-
-## Assets
-
-`assets/alfresi/alfresi_premium.png` es el asset local transparente de la mascota. Se creó con la herramienta integrada de generación de imágenes, solamente como recurso visual. Los iconos y la marca se dibujan con Flutter y recursos locales. Los archivos `alfresi_idle.png`, `alfresi_success.png`, `alfresi_warning.png`, `alfresi_error.png` y `alfresi_thinking.png` exportan el fallback vectorial.
-
-Prompt utilizado para el asset premium:
-
-> Use case: stylized-concept. Asset type: production mobile app mascot cutout, not a UI mockup. Create ALFRESI, a small premium industrial robotics assistant. Friendly but not childish. Full body of ONE compact rounded robot centered, face looking straight ahead, slight three quarter torso. Cream ivory enamel body, polished golden cheese-yellow metal trim, dark glossy black face screen, two large warm amber LED eyes and subtle friendly curved smile, tiny antenna with orange light, articulated small arms and feet, simple circular gold chest badge with single capital letter A. High-end detailed 3D product illustration, realistic bevels, restrained warm rim lighting and small warm highlights, legible silhouette at 64 pixels. Robot alone occupies 90 percent of square frame. Actual transparent background, no ground plane, no shadows beyond tiny contact shadow under feet, no surrounding scenery, no food, no burger base, no other text, no logos, no speech bubble, no panels, no interface. Elegant warm industrial technology character for the BLANQUITA robot control app. Golden yellow #FFC928 accents, ivory #FFF4E3 and dark brown #100A06. No emoji or flat vector styling.
-
-## Tests y evidencias
-
-La validación automatizada se registra en [validación](evidencias/validacion/RESULTADOS.md). Las capturas están enumeradas y enlazadas en la [galería de evidencias](evidencias/ui/README.md).
-
-Las capturas son renders reales de los widgets Flutter implementados, generados por `flutter test` a resolución 2× con las fuentes Outfit, Material Icons y Cupertino Icons locales. Los canales de las pruebas son dobles de transporte: los dominios `.test` y el estado conectado de esas capturas son escenarios de prueba, no datos de dispositivos físicos.
-
-Se validan 360×800, 390×844, 412×915, 800×1024 y 844×390, con texto de sistema al 100 % y 200 %, además del tamaño de texto Grande y densidad Grande. Se recorre el contenido desplazable de las cuatro pantallas y se abre Diagnósticos.
-
-No se conectó ni se movió un robot físico en esta tarea. La validación visual y el APK no sustituyen una prueba con el ESP32 y el servidor de visión reales.
-
-Para regenerar las capturas:
+Para regenerar capturas y goldens tras revisar cambios visuales:
 
 ```powershell
-flutter test test/frontend_evidence_test.dart --dart-define=GENERAR_EVIDENCIAS=true
+flutter test test/refinement_goldens_test.dart --dart-define=CAPTURAR_REFINAMIENTO=true --update-goldens
 ```
 
-Para volver al diseño anterior dentro de esta aplicación: Ajustes → Tema visual → Original. Para utilizar la aplicación Android de respaldo, abrir BLANQUITA Víctor.
+Para verificar sin reescribir las expectativas:
+
+```powershell
+flutter test
+```
+
+## Limitaciones conocidas
+
+- No es pixel-perfect: el robot real se representa como cartesiano y el montaje de referencia muestra un brazo articulado.
+- Esta base no ofrece discovery ni fases públicas HMAC/V2. Se muestran los datos existentes, con un radar estático claramente explicado.
+- No hay streaming; FPS, latencia y reportes ausentes siguen como “—” o “Sin datos”. No hay porcentaje de velocidad absoluto.
+- La frutilla mantiene la resolución y el fondo del montaje original. Los recortes pequeños no equivalen a assets transparentes independientes en alta resolución.
+- Las capturas de prueba acreditan render y composición; la instalación en teléfono acredita el frontend Android. No se realizaron movimientos del robot ni se usó hardware para rellenar estados.

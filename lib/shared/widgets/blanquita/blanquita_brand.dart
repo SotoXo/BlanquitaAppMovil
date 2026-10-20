@@ -9,12 +9,16 @@ class BlanquitaBrand extends StatelessWidget {
   Widget build(BuildContext context) => Semantics(
     label: 'BLANQUITA · tema Hamburguesa',
     image: true,
-    child: CustomPaint(size: Size.square(size), painter: const _BrandPainter()),
+    child: CustomPaint(
+      size: Size.square(size),
+      painter: const BurgerMarkPainter(),
+    ),
   );
 }
 
-class _BrandPainter extends CustomPainter {
-  const _BrandPainter();
+class BurgerMarkPainter extends CustomPainter {
+  const BurgerMarkPainter({this.opacity = 1});
+  final double opacity;
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
@@ -24,14 +28,17 @@ class _BrandPainter extends CustomPainter {
       ..moveTo(4, 16)
       ..cubicTo(4, 0, 36, 0, 36, 16)
       ..close();
-    p.shader = const LinearGradient(
+    p.shader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
-      colors: [Color(0xFFFFDF85), Color(0xFFE67E15)],
+      colors: [
+        BlanquitaColors.cream.withValues(alpha: opacity),
+        BlanquitaColors.cheddar.withValues(alpha: opacity),
+      ],
     ).createShader(const Rect.fromLTWH(4, 4, 32, 12));
     canvas.drawPath(bun, p);
     p.shader = null;
-    p.color = BlanquitaColors.hamburger.coldWhite;
+    p.color = BlanquitaColors.hamburger.coldWhite.withValues(alpha: opacity);
     for (final seed in [
       const Offset(12, 10),
       const Offset(20, 7),
@@ -44,15 +51,16 @@ class _BrandPainter extends CustomPainter {
         Rect.fromLTWH(3, y, 34, height),
         const Radius.circular(3),
       ),
-      p..color = c,
+      p..color = c.withValues(alpha: opacity),
     );
     layer(18, 4, BlanquitaColors.hamburger.mint);
     layer(23, 4, BlanquitaColors.hamburger.danger);
-    layer(28, 5, const Color(0xFF6B3515));
+    layer(28, 5, BlanquitaColors.brownStrong);
     layer(34, 4, BlanquitaColors.hamburger.cyanDeep);
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(_BrandPainter oldDelegate) => false;
+  bool shouldRepaint(BurgerMarkPainter oldDelegate) =>
+      oldDelegate.opacity != opacity;
 }

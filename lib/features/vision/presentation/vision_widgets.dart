@@ -1,3 +1,6 @@
+import 'package:provider/provider.dart';
+import '../../settings/controller/settings_controller.dart';
+import '../../settings/controller/app_settings.dart';
 import 'package:flutter/material.dart';
 
 import '../../../app/design/blanquita_design.dart';
@@ -56,7 +59,13 @@ class VisionReadouts extends StatelessWidget {
         ],
         for (final entry in rows.entries)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 7),
+            padding: EdgeInsets.symmetric(
+              vertical:
+                  context.watch<SettingsController>().settings.visualTheme ==
+                      BlanquitaVisualTheme.original
+                  ? 7
+                  : 4,
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

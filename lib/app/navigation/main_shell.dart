@@ -1,3 +1,7 @@
+import '../design/blanquita_design.dart';
+import '../../features/devices/presentation/devices_screen.dart';
+import '../../features/settings/controller/app_settings.dart';
+import 'blanquita_bottom_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -25,14 +29,14 @@ class _MainShellState extends State<MainShell> {
     ControlScreen(),
     VisionScreen(),
     SettingsScreen(),
+    DevicesScreen(),
   ];
 
   void _select(int index) {
     if (_index == index) return;
     setState(() => _index = index);
     final settings = context.read<SettingsController>().settings;
-    final reduceMotion =
-        settings.reduceMotion || MediaQuery.disableAnimationsOf(context);
+    final reduceMotion = BlanquitaDesign.reduce(context, settings);
     if (reduceMotion) {
       _pageController.jumpToPage(index);
     } else {
@@ -46,10 +50,17 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    final warm =
+        context.watch<SettingsController>().settings.visualTheme !=
+        BlanquitaVisualTheme.original;
     return AppBackground(
+      scene: _index,
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        extendBody: true,
+        extendBody: !warm,
+        bottomNavigationBar: warm
+            ? BlanquitaBottomNavigation(index: _index, onSelected: _select)
+            : null,
         body: Stack(
           children: [
             PageView(
@@ -60,23 +71,24 @@ class _MainShellState extends State<MainShell> {
               },
               children: _pages,
             ),
-            Positioned(
-              left: 14,
-              right: 14,
-              bottom: 10,
-              child: SafeArea(
-                top: false,
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 620),
-                    child: GlassNavigationBar(
-                      index: _index,
-                      onSelected: _select,
+            if (!warm)
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 10,
+                child: SafeArea(
+                  top: false,
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 620),
+                      child: GlassNavigationBar(
+                        index: _index,
+                        onSelected: _select,
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),

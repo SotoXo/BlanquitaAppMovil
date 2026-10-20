@@ -1,3 +1,7 @@
+import '../../../features/assistant/presentation/alfresi_avatar.dart';
+import '../../../features/assistant/domain/alfresi_message.dart';
+import '../../../features/settings/controller/settings_controller.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import '../../../app/design/blanquita_design.dart';
 import 'blanquita_components.dart';
@@ -20,8 +24,17 @@ class BlanquitaLockState extends StatelessWidget {
           ? BlanquitaColors.of(context).danger
           : BlanquitaColors.of(context).warning,
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (context.watch<SettingsController>().settings.assistantEnabled)
+            const Center(
+              child: AlfresiAvatar(
+                size: AlfresiSizes.l,
+                mood: AlfresiMood.warning,
+              ),
+            ),
+          const SizedBox(height: BlanquitaSpacing.sm),
           Icon(
             Icons.lock_outline,
             size: 28,

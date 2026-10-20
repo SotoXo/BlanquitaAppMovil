@@ -1,3 +1,4 @@
+import '../../../shared/widgets/blanquita/blanquita_scaffold.dart';
 import '../../assistant/presentation/alfresi_bubble.dart';
 import '../../assistant/domain/alfresi_context.dart';
 import '../../assistant/services/alfresi_rules.dart';
@@ -759,155 +760,101 @@ class _HamburgerDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = machine.state;
-    final visionController = context.watch<VisionController>();
-    final vision = visionController.state;
-    final preferences = context.watch<SettingsController>().settings;
+    final vision = context.watch<VisionController>();
+    final settings = context.watch<SettingsController>().settings;
     final summary = AlfresiRules.explain(
-      AlfresiContext.read(machine, visionController, 'Inicio'),
+      AlfresiContext.read(machine, vision, 'Inicio'),
     );
-    final summaryColor =
-        state.finalLimitActive == true || state.connectionError != null
+    final color = state.finalLimitActive == true
         ? BlanquitaColors.of(context).danger
-        : state.isConnected && vision.ready && state.finalLimitActive == false
+        : state.isConnected
         ? BlanquitaColors.of(context).mint
         : BlanquitaColors.of(context).warning;
-    return SafeArea(
-      bottom: false,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 22, 20, 126),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 900),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                PageHeader(
-                  eyebrow: 'ROBÓTICA INDUSTRIAL · CONTROL LOCAL',
-                  title: 'BLANQUITA',
-                  subtitle: 'Precisión en cada movimiento.',
-                  trailing: ConnectionBadge(phase: state.connection),
-                ),
-                const SizedBox(height: 22),
-                if (state.finalLimitActive == true) ...[
-                  SafetyBanner(
-                    icon: Icons.warning_amber,
-                    title: 'Final de carrera activo',
-                    message: 'Movimiento bloqueado por seguridad.',
-                    color: BlanquitaColors.of(context).danger,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                BlanquitaCard(
-                  borderColor: summaryColor.withValues(alpha: .7),
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
+    return BlanquitaScaffold(
+      title: 'BLANQUITA',
+      children: [
+        if (settings.assistantEnabled && settings.assistantTips) ...[
+          AlfresiBubble(message: summary.title, mood: summary.mood),
+          const SizedBox(height: BlanquitaSpacing.lg),
+        ],
+        LayoutBuilder(
+          builder: (context, c) {
+            final cards = [
+              BlanquitaDeviceCard(
+                name: 'ESP32',
+                status: machine.connectionStatusLabel,
+                ready: machine.protocolReady,
+                icon: Icons.memory_outlined,
+              ),
+              BlanquitaDeviceCard(
+                name: 'Visión · laptop',
+                status: visionConnectionLabel(vision.state),
+                ready: vision.state.ready,
+                icon: Icons.visibility_outlined,
+              ),
+            ];
+            return MediaQuery.textScalerOf(context).scale(14) > 22
+                ? Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [cards[0], const SizedBox(height: 12), cards[1]],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Estado general',
-                        style: Theme.of(context).textTheme.labelMedium,
-                      ),
-                      const SizedBox(height: 10),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            state.finalLimitActive == true
-                                ? Icons.lock
-                                : state.isConnected
-                                ? Icons.precision_manufacturing
-                                : Icons.link_off,
-                            color: summaryColor,
-                            size: 28,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              summary.title,
-                              style: Theme.of(context).textTheme.titleMedium
-                                  ?.copyWith(color: summaryColor),
-                            ),
-                          ),
-                        ],
-                      ),
+                      Expanded(child: cards[0]),
+                      const SizedBox(width: 12),
+                      Expanded(child: cards[1]),
                     ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-                _MachineHero(state: state),
-                if (preferences.assistantEnabled &&
-                    preferences.assistantTips) ...[
-                  const SizedBox(height: 16),
-                  AlfresiBubble(message: summary.body, mood: summary.mood),
-                ],
-                const SizedBox(height: 24),
-                BlanquitaSection(
-                  title: 'Conexiones',
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final cards = [
-                        BlanquitaDeviceCard(
-                          name: 'ESP32',
-                          status: machine.connectionStatusLabel,
-                          ready: machine.protocolReady,
-                          icon: Icons.memory,
-                        ),
-                        BlanquitaDeviceCard(
-                          name: 'Visión · laptop',
-                          status: visionConnectionLabel(vision),
-                          ready: vision.ready,
-                          icon: Icons.center_focus_strong,
-                        ),
-                      ];
-                      if (constraints.maxWidth < 340 ||
-                          MediaQuery.textScalerOf(context).scale(14) > 22) {
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            cards[0],
-                            const SizedBox(height: 12),
-                            cards[1],
-                          ],
-                        );
-                      }
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(child: cards[0]),
-                          const SizedBox(width: 12),
-                          Expanded(child: cards[1]),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 24),
-                BlanquitaSection(
-                  title: 'Robot y sensores',
-                  child: _StatusMatrix(state: state),
-                ),
-                const SizedBox(height: 24),
-                BlanquitaSection(
-                  title: 'Actividad reciente',
-                  child: _ActivityPanel(
-                    state: state,
-                    events: machine.events.take(4).toList(),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const WifiNetworkPanel(),
-                const SizedBox(height: 16),
-                _ConnectionDetails(
-                  state: state,
-                  websocketUrl:
-                      machine.connectionWebsocketUrl ??
-                      'Sin dirección guardada',
-                ),
-              ],
-            ),
+                  );
+          },
+        ),
+        const SizedBox(height: BlanquitaSpacing.lg),
+        BlanquitaCard(
+          padding: BlanquitaSpacing.card,
+          borderColor: color.withValues(alpha: .5),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(height: 220, child: CartesianVisualizer(state: state)),
+              const SizedBox(height: BlanquitaSpacing.md),
+              BlanquitaStatus(
+                label: !state.isConnected
+                    ? 'Estado no confirmado'
+                    : state.finalLimitActive == true
+                    ? 'Bloqueado por seguridad'
+                    : state.sequenceActive
+                    ? 'Secuencia activa'
+                    : state.activeMovement?.label ?? 'Sistema en reposo',
+                color: color,
+                icon: state.finalLimitActive == true
+                    ? Icons.lock_outline
+                    : Icons.precision_manufacturing_outlined,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                state.lastStatus,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ),
         ),
-      ),
+        const SizedBox(height: BlanquitaSpacing.lg),
+        _StatusMatrix(state: state),
+        const SizedBox(height: BlanquitaSpacing.lg),
+        BlanquitaSection(
+          title: 'Actividad reciente',
+          child: _ActivityPanel(
+            state: state,
+            events: machine.events.take(4).toList(),
+          ),
+        ),
+        const SizedBox(height: BlanquitaSpacing.lg),
+        _ConnectionDetails(
+          state: state,
+          websocketUrl:
+              machine.connectionWebsocketUrl ?? 'Sin dirección guardada',
+        ),
+      ],
     );
   }
 }

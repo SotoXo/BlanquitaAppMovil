@@ -43,7 +43,19 @@ class GlassSurface extends StatelessWidget {
     final blurOn = glassOn && blur;
     if (settings.visualTheme != BlanquitaVisualTheme.original) {
       final colors = BlanquitaColors.of(context);
-      final densityRadius = BorderRadius.circular(BlanquitaDesign.radius * d);
+      final opacity = !isDark || settings.performanceMode
+          ? BlanquitaOpacity.critical
+          : emphasis == GlassEmphasis.prominent
+          ? BlanquitaOpacity.raised
+          : BlanquitaOpacity.surface;
+      final densityRadius = BorderRadius.circular(
+        (elevation == 0
+                ? BlanquitaRadius.small
+                : emphasis == GlassEmphasis.prominent
+                ? BlanquitaRadius.hero
+                : BlanquitaRadius.standard) *
+            d,
+      );
       Widget content = Material(
         type: MaterialType.transparency,
         child: Padding(padding: (padding ?? EdgeInsets.zero) * d, child: child),
@@ -53,13 +65,21 @@ class GlassSurface extends StatelessWidget {
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: tint == null
-                ? colors.graphite
-                : Color.alphaBlend(tint!, colors.graphite),
+                ? Colors.transparent
+                : Color.alphaBlend(
+                    tint!,
+                    colors.graphite,
+                  ).withValues(alpha: BlanquitaOpacity.critical),
             gradient: tint == null
                 ? LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [colors.graphiteRaised, colors.graphite],
+                    colors: [
+                      emphasis == GlassEmphasis.prominent
+                          ? colors.graphiteRaised.withValues(alpha: opacity)
+                          : colors.graphite.withValues(alpha: opacity),
+                      colors.graphite.withValues(alpha: opacity),
+                    ],
                     stops: const [0, .8],
                   )
                 : null,

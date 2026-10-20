@@ -1,3 +1,9 @@
+import '../../assistant/presentation/alfresi_bubble.dart';
+import '../../assistant/domain/alfresi_context.dart';
+import '../../assistant/services/alfresi_rules.dart';
+import '../../settings/controller/settings_controller.dart';
+import '../../settings/controller/app_settings.dart';
+import '../../../shared/widgets/blanquita/blanquita_scaffold.dart';
 import '../../../shared/widgets/blanquita/blanquita_components.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -18,19 +24,23 @@ import '../../vision/controller/vision_controller.dart';
 import '../../vision/presentation/vision_widgets.dart';
 
 class DiagnosticsScreen extends StatefulWidget {
-  const DiagnosticsScreen({super.key});
+  const DiagnosticsScreen({super.key, this.initialView = 0, this.journal});
+  final ConnectionLog? journal;
+  final int initialView;
   @override
   State<DiagnosticsScreen> createState() => _DiagnosticsScreenState();
 }
 
 class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
-  int _view = 0;
+  late int _view = widget.initialView;
 
   @override
   Widget build(BuildContext context) {
     final machine = context.watch<MachineController>();
     final vision = context.watch<VisionController>();
     final wifi = context.watch<WifiNetworkController>();
+    final settings = context.watch<SettingsController>().settings;
+    final warm = settings.visualTheme != BlanquitaVisualTheme.original;
     final state = machine.state;
     final vs = vision.state;
     final controlEndpoint = EndpointValidation.parse(
@@ -67,12 +77,14 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
     return AppBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          title: const Text('Diagnósticos'),
-        ),
+        appBar: warm
+            ? null
+            : AppBar(
+                backgroundColor: Colors.transparent,
+                title: const Text('Diagnósticos'),
+              ),
         body: SafeArea(
-          top: false,
+          top: warm,
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 12, 20, 34),
             child: Center(
@@ -81,12 +93,25 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const PageHeader(
-                      eyebrow: 'Telemetría local',
-                      title: 'Diagnósticos',
-                      subtitle:
-                          'Control ESP32 y visión de la laptop tienen sesiones independientes. Red esperada: CARTESIANO o una LAN común.',
-                    ),
+                    if (warm)
+                      const BlanquitaHeader(title: 'Diagnósticos', back: true)
+                    else
+                      const PageHeader(
+                        eyebrow: 'Telemetría local',
+                        title: 'Diagnósticos',
+                        subtitle:
+                            'Control ESP32 y visión de la laptop tienen sesiones independientes. Red esperada: CARTESIANO o una LAN común.',
+                      ),
+                    if (warm &&
+                        settings.assistantEnabled &&
+                        settings.assistantTips) ...[
+                      AlfresiBubble(
+                        message: AlfresiRules.explain(
+                          AlfresiContext.read(machine, vision, 'Diagnósticos'),
+                        ).title,
+                      ),
+                      const SizedBox(height: BlanquitaSpacing.md),
+                    ],
                     const SizedBox(height: 20),
                     BlanquitaSegmentedControl<int>(
                       value: _view,
@@ -154,6 +179,7 @@ class _DiagnosticsScreenState extends State<DiagnosticsScreen> {
                         control: control,
                         vision: visionRows,
                         wifi: wifi.snapshot,
+                        source: widget.journal,
                       ),
                     const SizedBox(height: 24),
                     if (_view == 1) ...[
@@ -450,16 +476,18 @@ class _ConnectionJournal extends StatelessWidget {
     required this.control,
     required this.vision,
     required this.wifi,
+    this.source,
   });
   final Map<String, String> control;
   final Map<String, String> vision;
   final Map<String, String> wifi;
+  final ConnectionLog? source;
 
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
-    animation: ConnectionLog.shared,
+    animation: source ?? ConnectionLog.shared,
     builder: (context, _) {
-      final log = ConnectionLog.shared;
+      final log = source ?? ConnectionLog.shared;
       return GlassPanel(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -530,6 +558,9 @@ class _ConnectionJournal extends StatelessWidget {
                   },
                 ),
                 OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: BlanquitaColors.of(context).danger,
+                  ),
                   icon: const Icon(CupertinoIcons.trash, size: 18),
                   label: const Text('LIMPIAR'),
                   onPressed: log.entries.isEmpty ? null : log.clear,
@@ -569,9 +600,10 @@ class _ConnectionLogLine extends StatelessWidget {
       entry.technicalMessage,
     ].join('\n');
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.fromLTRB(12, 10, 0, 10),
       decoration: BoxDecoration(
         border: Border(
+          left: BorderSide(color: color.withValues(alpha: .5), width: 2),
           bottom: BorderSide(
             color: BlanquitaColors.of(context).steel.withValues(alpha: 0.15),
           ),
@@ -580,11 +612,19 @@ class _ConnectionLogLine extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            '● ${visionTime(entry.timestamp)}  ${entry.channel.name.toUpperCase()}  ${entry.level.name.toUpperCase()}',
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: color),
+          Row(
+            children: [
+              Icon(Icons.circle, size: 8, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${visionTime(entry.timestamp)}  ${entry.channel.name.toUpperCase()}  ${entry.level.name.toUpperCase()}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelSmall?.copyWith(color: color),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 6),
           Text(

@@ -1,3 +1,6 @@
+import '../../../features/assistant/presentation/alfresi_avatar.dart';
+import '../../../features/assistant/domain/alfresi_message.dart';
+import '../../../features/settings/controller/app_settings.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -73,17 +76,139 @@ class BlanquitaModal extends StatelessWidget {
     final colors = BlanquitaColors.of(context);
     final (icon, color) = switch (type) {
       BlanquitaModalType.success => (Icons.check_circle_outline, colors.mint),
+      BlanquitaModalType.loading => (
+        Icons.pending_outlined,
+        BlanquitaColors.info,
+      ),
       BlanquitaModalType.error => (Icons.error_outline, colors.danger),
       BlanquitaModalType.warning ||
       BlanquitaModalType.confirmation => (Icons.warning_amber, colors.warning),
       _ => (Icons.info_outline, colors.cyan),
     };
+    final settings = context.watch<SettingsController>().settings;
+    final reduce = BlanquitaDesign.reduce(context, settings);
+    if (settings.visualTheme != BlanquitaVisualTheme.original) {
+      final mood = switch (type) {
+        BlanquitaModalType.success => AlfresiMood.success,
+        BlanquitaModalType.error => AlfresiMood.error,
+        BlanquitaModalType.loading => AlfresiMood.thinking,
+        BlanquitaModalType.warning ||
+        BlanquitaModalType.confirmation => AlfresiMood.warning,
+        _ => AlfresiMood.idle,
+      };
+      return Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(BlanquitaSpacing.xl),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 340),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (settings.assistantEnabled)
+                  AlfresiAvatar(size: 96, mood: mood),
+                const SizedBox(height: BlanquitaSpacing.md),
+                Container(
+                  padding: BlanquitaSpacing.card,
+                  decoration: BoxDecoration(
+                    color: Color.alphaBlend(
+                      color.withValues(alpha: .10),
+                      colors.graphite,
+                    ),
+                    borderRadius: BlanquitaRadius.card,
+                    border: Border.all(color: color.withValues(alpha: .65)),
+                    boxShadow:
+                        settings.shadowsEnabled && !settings.performanceMode
+                        ? [
+                            BoxShadow(
+                              color: color.withValues(alpha: .1),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Semantics(
+                        label: type == BlanquitaModalType.loading
+                            ? 'Esperando respuesta'
+                            : title,
+                        child: Icon(
+                          type == BlanquitaModalType.loading
+                              ? Icons.pending_outlined
+                              : icon,
+                          color: color,
+                          size: 40,
+                        ),
+                      ),
+                      const SizedBox(height: BlanquitaSpacing.md),
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: BlanquitaSpacing.sm),
+                      Text(
+                        message,
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      if (type == BlanquitaModalType.loading) ...[
+                        const SizedBox(height: BlanquitaSpacing.lg),
+                        if (reduce)
+                          Semantics(
+                            label: 'Esperando respuesta; progreso no informado',
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                for (var i = 0; i < 3; i++)
+                                  Padding(
+                                    padding: const EdgeInsets.all(
+                                      BlanquitaSpacing.xs,
+                                    ),
+                                    child: Icon(
+                                      Icons.circle,
+                                      size: 6,
+                                      color: color,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          )
+                        else
+                          LinearProgressIndicator(
+                            color: color,
+                            backgroundColor: color.withValues(alpha: .15),
+                            borderRadius: BlanquitaRadius.card,
+                          ),
+                      ],
+                      if (actions.isNotEmpty) ...[
+                        const SizedBox(height: BlanquitaSpacing.xl),
+                        OverflowBar(
+                          alignment: MainAxisAlignment.center,
+                          overflowAlignment: OverflowBarAlignment.center,
+                          spacing: 8,
+                          overflowSpacing: 8,
+                          children: actions,
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return AlertDialog(
       scrollable: true,
       icon: type == BlanquitaModalType.loading
           ? Semantics(
               label: 'Esperando respuesta',
-              child: MediaQuery.disableAnimationsOf(context)
+              child: reduce
                   ? Icon(Icons.hourglass_top, color: color, size: 40)
                   : SizedBox(
                       width: 40,

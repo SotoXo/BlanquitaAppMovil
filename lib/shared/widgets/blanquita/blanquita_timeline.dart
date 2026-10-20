@@ -21,28 +21,65 @@ class BlanquitaTimeline extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final (label, complete, active) in steps)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(
-              complete
-                  ? Icons.check_circle
-                  : active
-                  ? Icons.hourglass_top
-                  : Icons.radio_button_unchecked,
-              color: complete
-                  ? BlanquitaColors.of(context).mint
-                  : active
-                  ? BlanquitaColors.of(context).warning
-                  : BlanquitaColors.of(context).steel,
-            ),
-            title: Text(label),
-            subtitle: Text(
-              complete
-                  ? 'Completado'
-                  : active
-                  ? 'Procesando'
-                  : 'Pendiente',
+        for (var i = 0; i < steps.length; i++)
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: 40,
+                  child: Column(
+                    children: [
+                      Icon(
+                        steps[i].$2
+                            ? Icons.check_circle
+                            : steps[i].$3
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                        size: 28,
+                        color: steps[i].$2
+                            ? BlanquitaColors.of(context).mint
+                            : steps[i].$3
+                            ? BlanquitaColors.of(context).cyan
+                            : BlanquitaColors.of(context).steel,
+                      ),
+                      if (i < steps.length - 1)
+                        Expanded(
+                          child: Container(
+                            width: 1,
+                            color: BlanquitaColors.of(
+                              context,
+                            ).mint.withValues(alpha: .4),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          steps[i].$1,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          steps[i].$2
+                              ? 'Completado'
+                              : steps[i].$3
+                              ? 'Procesando'
+                              : 'Pendiente',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ExpansionTile(

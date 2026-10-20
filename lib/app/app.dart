@@ -9,6 +9,7 @@ import '../core/network/wifi_network_controller.dart';
 import '../features/settings/controller/settings_controller.dart';
 import '../features/vision/controller/vision_controller.dart';
 import 'navigation/main_shell.dart';
+import 'presentation/blanquita_splash.dart';
 import 'design/blanquita_design.dart';
 import 'design/visual_transition.dart';
 
@@ -148,7 +149,7 @@ class _BlanquitaAppState extends State<BlanquitaApp>
                   ),
                 );
               },
-              home: const MainShell(),
+              home: const StartupPresentation(child: MainShell()),
             ),
           );
         },

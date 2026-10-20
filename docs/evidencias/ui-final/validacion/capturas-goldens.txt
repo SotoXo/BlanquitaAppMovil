@@ -1,0 +1,546 @@
+00:00 +0: loading C:/Users/LOQ/Desktop/UNIFRANZ/SEXTO SEMESTRE/HARDWARE/BlanquitaAppMovil/test/refinement_goldens_test.dart
+00:00 +0: theme preview applies explicitly and keeps route, controllers, connections and log
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:23.120560] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:23.130557] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:01 +1: rain animates and Reduce Motion stops decorative frames
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:24.556944] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:24.556944] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:01 +2: golden ALFRESI abierto
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:24.628024] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:24.628024] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:03 +3: golden Inicio Original
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:25.975771] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:25.975771] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:04 +4: golden Diagnósticos
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:27.123284] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:27.124293] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:05 +5: golden Ajustes
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:28.194277] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:28.194277] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:06 +6: golden Tema Visual
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:29.286560] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:29.286560] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:07 +7: golden 10-modal-error
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:30.371406] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:30.371406] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:08 +8: golden 11-modal-success
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:31.395010] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:31.396012] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:09 +9: golden 12-modal-waiting
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:32.384034] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:32.384034] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:10 +10: golden Bloqueo
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:33.318270] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:33.319266] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:11 +11: new views responsive 360.0x800.0 text 1.0
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:34.203588] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:34.203588] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:34.287678] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:34.287678] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:34.379218] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:34.380222] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:34.484751] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:34.485753] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:34.616856] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:34.617856] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:11 +12: new views responsive 390.0x844.0 text 1.0
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:34.706029] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:34.706029] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:34.781796] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:34.781796] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:34.866333] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:34.866333] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:34.980909] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:34.981912] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.101562] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.101562] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:12 +13: new views responsive 412.0x915.0 text 1.0
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.182242] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.182242] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.251237] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.252238] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.331777] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.332778] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.423314] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.423314] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.519856] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.520863] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:12 +14: new views responsive 800.0x1100.0 text 1.0
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.588949] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.588949] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.648945] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.648945] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.720481] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.720481] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.795537] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.796538] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:35.942087] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:35.942087] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:13 +15: new views responsive 844.0x390.0 text 1.0
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.013194] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.013194] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.075207] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.075207] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.157388] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.157388] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.235526] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.236527] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.335080] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.336077] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:13 +16: new views responsive 360.0x800.0 text 2.0
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.405740] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.406735] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.468758] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.468758] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.544273] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.544273] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.628936] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.628936] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.739469] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.739469] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:13 +17: new views responsive 844.0x390.0 text 2.0
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.809640] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.810639] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.874657] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.874657] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:36.936175] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:36.937174] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:37.012434] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:37.012434] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:37.089495] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:37.090505] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:14 +18: golden Control
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:37.148497] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:37.149496] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:15 +19: golden Visión
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:37.928853] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:37.929854] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:15 +20: golden Splash
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:38.519261] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:38.519261] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:16 +21: golden Dispositivos
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:39.746628] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:39.746628] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:17 +22: golden Vinculación
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:40.380426] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:40.381421] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:18 +23: golden Inicio
+[BLANQUITA][CONTROL][INFO] [2026-10-20T13:23:41.554504] CONTROL INFO
+URL de control cargada
+channel=control phase=endpoint_loaded attempt=0
+endpoint=ws://esp32.test:81/
+
+[BLANQUITA][VISION][INFO] [2026-10-20T13:23:41.554504] VISION INFO
+Dirección de visión cargada.
+channel=vision phase=disconnected attempt=0
+endpoint=ws://laptop.test:8765/
+
+00:19 +24: All tests passed!

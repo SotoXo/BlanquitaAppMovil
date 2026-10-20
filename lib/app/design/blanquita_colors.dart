@@ -30,23 +30,37 @@ class BlanquitaColors extends ThemeExtension<BlanquitaColors> {
     warning: Color(0xFFEDA963),
     danger: Color(0xFFF06D79),
   );
+  static const backgroundDeep = Color(0xFF17100B);
+  static const background = Color(0xFF21150D);
+  static const surface = Color(0xFF321F10);
+  static const surfaceSoft = Color(0xFF3A2515);
+  static const surfaceRaised = Color(0xFF4A2A12);
+  static const brownStrong = Color(0xFF6D360F);
+  static const cream = Color(0xFFF6EBD3);
+  static const creamMuted = Color(0xFFAAA59A);
+  static const cheese = Color(0xFFF1B822);
+  static const cheddar = Color(0xFFCA6730);
+  static const lettuce = Color(0xFF7AC227);
+  static const success = Color(0xFF29D24A);
+  static const ketchup = Color(0xFFDD1415);
+  static const info = Color(0xFF43A7D8);
   static const hamburger = BlanquitaColors(
-    canvas: Color(0xFF100A06),
-    graphite: Color(0xFF21140C),
-    graphiteRaised: Color(0xFF2D1C11),
-    coldWhite: Color(0xFFFFF4E3),
-    steel: Color(0xFFBDA58F),
-    cyan: Color(0xFFFFC928),
-    cyanDeep: Color(0xFFFFA31A),
-    mint: Color(0xFF55D63A),
-    warning: Color(0xFFFFA31A),
-    danger: Color(0xFFFF343F),
+    canvas: backgroundDeep,
+    graphite: background,
+    graphiteRaised: surface,
+    coldWhite: cream,
+    steel: creamMuted,
+    cyan: cheese,
+    cyanDeep: cheddar,
+    mint: success,
+    warning: cheese,
+    danger: Color(0xFFFF2B25),
   );
-  static const backgroundSoft = Color(0xFF180F09);
-  static const toasted = Color(0xFFE67E15);
-  static const tomato = Color(0xFFE72831);
-  static const sesame = Color(0xFFE5C69A);
-  static const muted = Color(0xFF9A8472);
+  static const backgroundSoft = surfaceSoft;
+  static const toasted = cheddar;
+  static const tomato = ketchup;
+  static const sesame = cream;
+  static const muted = creamMuted;
 
   static BlanquitaColors of(BuildContext context) =>
       Theme.of(context).extension<BlanquitaColors>() ?? original;
